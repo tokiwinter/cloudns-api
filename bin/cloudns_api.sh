@@ -7,12 +7,15 @@ ECHO="builtin echo"
 EVAL="builtin eval"
 GETOPTS="builtin getopts"
 JQ="/usr/bin/jq"
+SED="/usr/bin/sed"
 TEST="/usr/bin/test"
 
 API_URL="https://api.cloudns.net/dns"
 DEBUG=0
 SKIP_TESTS=0
 THISPROG=$( ${BASENAME} $0 )
+
+ROWS_PER_PAGE=100
 
 function print_error {
   ${ECHO} "$( ${DATE} ): Error: $@" >&2
@@ -38,10 +41,10 @@ function process_arguments {
     print_usage && exit 1
   fi
   case ${COMMAND} in
-    "help"         ) print_usage && exit 0 ;;
-    "test"         ) test_login            ;;
-    "listzones"    ) list_zones            ;;
-    *              ) print_usage && exit 1 ;;
+    "help"         ) print_usage && exit 0    ;;
+    "test"         ) test_login               ;;
+    "listzones"    ) list_zones "$@"          ;;
+    *              ) print_usage && exit 1    ;;
   esac
 }
 
@@ -79,11 +82,28 @@ function do_login {
   esac  
 }
 
+# limitation: presumes you are authoritative for <= 100 zones
 function list_zones {
   (( ! SKIP_TESTS )) && {
     test_api_url
     do_login
   }
+  local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
+  GET_STRING="${GET_STRING}&page=0&rows-per-page=${ROWS_PER_PAGE}"
+  local FLAG=""
+  local COUNTER=1
+  while [ "${FLAG}" != "STOP" ]; do
+    print_debug "Processing listzones page=${COUNTER} with rows-per-page=${ROWS_PER_PAGE}"
+    GET_STRING=$( ${ECHO} "${GET_STRING}" |\
+                  ${SED} "s/^\(.*&page=\)[0-9][0-9]*\(&.*\)$/\1${COUNTER}\2/" )
+    local OUTPUT=$( ${CURL} -4qs -X GET "${API_URL}/list-zones.json&${GET_STRING}" | ${JQ} -r . )
+    if [ "${OUTPUT}" = "[]" ]; then
+      FLAG="STOP"
+    else
+      ${ECHO} "${OUTPUT}" | ${JQ} -r '.[] | .name + ":" + .type'
+    fi
+    (( COUNTER = COUNTER + 1 ))
+  done
 }
 
 function test_login {
@@ -92,7 +112,6 @@ function test_login {
   do_login
   if [ "$?" -eq "0" ]; then
     print_timestamp "Login test successful"
-    exit 0
   else
     print_error "Login test failed"
     exit 1
