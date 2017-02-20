@@ -6,6 +6,7 @@ DATE="/usr/bin/date"
 ECHO="builtin echo"
 EVAL="builtin eval"
 GETOPTS="builtin getopts"
+GREP="/usr/bin/grep"
 JQ="/usr/bin/jq"
 SED="/usr/bin/sed"
 TEST="/usr/bin/test"
@@ -43,7 +44,15 @@ function process_arguments {
   case ${COMMAND} in
     "help"         ) print_usage && exit 0    ;;
     "test"         ) test_login               ;;
-    "listzones"    ) list_zones "$@"          ;;
+    "listzones"    ) list_zones               ;;
+    "checkzone"    ) shift
+                     check_zone "$@"          ;;
+    "addrecord"    ) shift
+                     add_record "$@"          ;;
+    "delrecord"    ) shift
+                     delete_record "$@"       ;;
+    "listrecords"  ) shift
+                     list_records "$@"        ;;
     *              ) print_usage && exit 1    ;;
   esac
 }
@@ -82,12 +91,43 @@ function do_login {
   esac  
 }
 
-# limitation: presumes you are authoritative for <= 100 zones
-function list_zones {
+function do_tests {
   (( ! SKIP_TESTS )) && {
     test_api_url
     do_login
   }
+}
+
+function check_zone {
+  do_tests
+  local ZONES="$@"
+  if [ -z "${ZONES}" ]; then
+    print_error "No zones passed to checkzone" && exit 1
+  fi
+  for ZONE in ${ZONES}; do
+    print_debug "Checking zone [${ZONE}]"
+    # Okay. I want to search for a complete zonename. The search functionality
+    # provided by list-zones.json does a partial match - not what I want. I'll
+    # re-use my list_zones function.
+    #local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
+    #GET_STRING="${GET_STRING}&page=1&rows-per-page=${ROWS_PER_PAGE}"
+    #GET_STRING="${GET_STRING}&search=${ZONE}"
+    #${CURL} -4qs -X GET "${API_URL}/list-zones.json&${GET_STRING}"
+    # If you have pages of zones returned by list-zones.json, this will be slow, and
+    # if enough people request it I may refactor.
+    list_zones | ${GREP} -qs "^${ZONE}:"
+    if [ "$?" -eq "0" ]; then
+      ${ECHO} "${ZONE}:present"
+      return 0
+    else
+      ${ECHO} "${ZONE}:absent"
+      return 1
+    fi
+  done
+}
+
+function list_zones {
+  do_tests
   local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
   GET_STRING="${GET_STRING}&page=0&rows-per-page=${ROWS_PER_PAGE}"
   local FLAG=""
