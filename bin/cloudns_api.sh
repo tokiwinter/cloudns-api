@@ -89,8 +89,8 @@ function test_api_url {
 }
 
 function do_login {
-  local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
-  local STATUS=$( ${CURL} -4qs -X GET "${API_URL}/login.json&${GET_STRING}" | ${JQ} -r '.status' )
+  local POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
+  local STATUS=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/login.json" | ${JQ} -r '.status' )
   case ${STATUS} in
     "Success" ) print_debug "Login successful"
                 return 0 ;;
@@ -138,22 +138,22 @@ function check_zone {
 
 function get_page_count {
   # do_tests already called in list_zones
-  local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
-  GET_STRING="${GET_STRING}&rows-per-page=${ROWS_PER_PAGE}"
-  local PAGE_COUNT=$( ${CURL} -4qs -X GET "${API_URL}/get-pages-count.json&${GET_STRING}" )
+  local POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
+  POST_DATA="${POST_DATA} -d rows-per-page=${ROWS_PER_PAGE}"
+  local PAGE_COUNT=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-pages-count.json" )
   ${ECHO} ${PAGE_COUNT}
 }
 function list_zones {
   do_tests
   local PAGE_COUNT=$( get_page_count )
-  local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
-  GET_STRING="${GET_STRING}&page=0&rows-per-page=${ROWS_PER_PAGE}"
   local COUNTER=0
+  local POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
+  POST_DATA="${POST_DATA} -d page=0 -d rows-per-page=${ROWS_PER_PAGE}"
   while [ "${COUNTER}" -lt "${PAGE_COUNT}" ]; do
     print_debug "Processing listzones page=$(( ${COUNTER} + 1 )) with rows-per-page=${ROWS_PER_PAGE}"
-    GET_STRING=$( ${ECHO} "${GET_STRING}" |\
-                  ${SED} "s/^\(.*&page=\)[0-9][0-9]*\(&.*\)$/\1$(( ${COUNTER} + 1 ))\2/" )
-    local OUTPUT=$( ${CURL} -4qs -X GET "${API_URL}/list-zones.json&${GET_STRING}" | ${JQ} -r . )
+    POST_DATA=$( ${ECHO} "${POST_DATA}" |\
+                 ${SED} "s/^\(.*-d page=\)[0-9][0-9]*\( .*\)$/\1$(( ${COUNTER} + 1 ))\2/" )
+    local OUTPUT=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/list-zones.json" | ${JQ} -r . )
     ${ECHO} "${OUTPUT}" | ${JQ} -r '.[] | .name + ":" + .type'
     (( COUNTER = COUNTER + 1 ))
   done
