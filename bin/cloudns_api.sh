@@ -45,8 +45,16 @@ function process_arguments {
     "help"         ) print_usage && exit 0    ;;
     "test"         ) test_login               ;;
     "listzones"    ) list_zones               ;;
+    "addzone"      ) shift
+                     add_zone "$@"            ;;
+    "delzone"      ) shift
+                     delete_zone "$@"         ;;
     "checkzone"    ) shift
                      check_zone "$@"          ;;
+    "dumpzone"     ) shift
+                     dump_zone "$@"           ;;
+    "zoneinfo"    )  shift
+                     zone_info "$@"           ;;
     "addrecord"    ) shift
                      add_record "$@"          ;;
     "delrecord"    ) shift
@@ -95,6 +103,8 @@ function do_tests {
   (( ! SKIP_TESTS )) && {
     test_api_url
     do_login
+  } || {
+    print_debug "-s passed - skipping tests"
   }
 }
 
@@ -126,22 +136,25 @@ function check_zone {
   done
 }
 
+function get_page_count {
+  # do_tests already called in list_zones
+  local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
+  GET_STRING="${GET_STRING}&rows-per-page=${ROWS_PER_PAGE}"
+  local PAGE_COUNT=$( ${CURL} -4qs -X GET "${API_URL}/get-pages-count.json&${GET_STRING}" )
+  ${ECHO} ${PAGE_COUNT}
+}
 function list_zones {
   do_tests
+  local PAGE_COUNT=$( get_page_count )
   local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
   GET_STRING="${GET_STRING}&page=0&rows-per-page=${ROWS_PER_PAGE}"
-  local FLAG=""
-  local COUNTER=1
-  while [ "${FLAG}" != "STOP" ]; do
-    print_debug "Processing listzones page=${COUNTER} with rows-per-page=${ROWS_PER_PAGE}"
+  local COUNTER=0
+  while [ "${COUNTER}" -lt "${PAGE_COUNT}" ]; do
+    print_debug "Processing listzones page=$(( ${COUNTER} + 1 )) with rows-per-page=${ROWS_PER_PAGE}"
     GET_STRING=$( ${ECHO} "${GET_STRING}" |\
-                  ${SED} "s/^\(.*&page=\)[0-9][0-9]*\(&.*\)$/\1${COUNTER}\2/" )
+                  ${SED} "s/^\(.*&page=\)[0-9][0-9]*\(&.*\)$/\1$(( ${COUNTER} + 1 ))\2/" )
     local OUTPUT=$( ${CURL} -4qs -X GET "${API_URL}/list-zones.json&${GET_STRING}" | ${JQ} -r . )
-    if [ "${OUTPUT}" = "[]" ]; then
-      FLAG="STOP"
-    else
-      ${ECHO} "${OUTPUT}" | ${JQ} -r '.[] | .name + ":" + .type'
-    fi
+    ${ECHO} "${OUTPUT}" | ${JQ} -r '.[] | .name + ":" + .type'
     (( COUNTER = COUNTER + 1 ))
   done
 }
