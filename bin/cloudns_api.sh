@@ -21,11 +21,13 @@ SKIP_TESTS=0
 THISPROG=$( ${BASENAME} $0 )
 
 ROWS_PER_PAGE=100
+SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
 
 # current limitations
 # - does not support sub-auth-id
 # - only supports master zones
 # - only supports forward zones
+# - only supports creation/modification of SUPPORTED_RECORD_TYPES
 
 function print_error {
   ${ECHO} "$( ${DATE} ): Error: $@" >&2
@@ -77,7 +79,7 @@ function process_arguments {
     "getsoa"       ) shift
                      get_soa "$@"             ;;
     "setsoa"       ) shift
-                     set_soa "$@"             ;; # notimplemented
+                     set_soa "$@"             ;;
     "helper"       ) shift
                      call_helper "$@"         ;;
     *              ) print_usage && exit 1    ;;
@@ -282,6 +284,7 @@ function list_records {
       unset KEY VALUE
     done
   fi
+  [[ "${ERROR_COUNT}" -gt "0" ]] && exit 1
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
   if [ -n "${RECORD_TYPE}" ]; then
     POST_DATA="${POST_DATA} -d type=${RECORD_TYPE}"
@@ -328,7 +331,7 @@ function get_soa {
 function set_soa {
   do_tests
   if [ "$#" -lt "2" ]; then
-    print_error "usage: ${THISPROG} setsoa <domain> key=value [key=value key=value ...]"
+    print_error "usage: ${THISPROG} setsoa <domain> key=<value> [key=<value> ...  key=<value>]"
     exit 1
   fi
   local ZONE="$1"
@@ -509,6 +512,7 @@ function validate_soa_value {
                 return $? ;;
     "ttl"     ) check_integer ${VALUE} 60 2419200
                 return $? ;;
+    *         ) return 0  ;;
   esac
 }
 
@@ -527,6 +531,116 @@ function dump_zone {
   else
     print_error "Unable to get zone file for [${ZONE}]" && exit 1
   fi
+}
+
+function add_record {
+  do_tests
+  if [ "$#" -lt "5" ]; then
+    print_error "usage: ${THISPROG} addrecord <zone> type=<type> host=<host> record=<record> ttl=<ttl> [key=<value> ... key=<value>]"
+    exit 1
+  fi
+  local ZONE="$1"
+  shift
+  local -a VALID_KEYS=( "type" "host" "record" "ttl" "priority" "weight" "port" )
+  local KV_PAIRS="$@" ERROR_COUNT=0
+  local KV_PAIR
+  for KV_PAIR in ${KV_PAIRS}; do
+    ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=.+$'
+    if [ "$?" -ne "0" ]; then
+      print_error "key-value pair [${KV_PAIR}] not incorrect format" && exit 1
+    fi
+    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
+    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    print_debug "Checking key-value pair: ${KEY}=${VALUE}"
+    if ! has_element VALID_KEYS "${KEY}"; then
+      print_error "${KEY} is not a valid key"
+      (( ERROR_COUNT = ERROR_COUNT + 1 ))
+    fi
+    unset KEY VALUE
+  done
+  unset KV_PAIR
+  local KV_PAIR RR_TYPE RR_HOST RR_RECORD RR_TTL RR_PRIORITY
+  local RR_WEIGHT RR_PORT
+  [[ "${ERROR_COUNT}" -gt "0" ]] && exit 1
+  for KV_PAIR in ${KV_PAIRS}; do
+    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
+    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    case ${KEY} in
+      "type"     ) validate_rr_value type null "${VALUE}"
+                   ;;
+      "host"     ) validate_rr_value host null "${VALUE}"
+                   ;;
+      "record"   ) # record validation happens at end of the for loop, as we
+                   # need RR_TYPE to be set, and params could be passed in any
+                   # order
+                   RR_RECORD="${VALUE}"
+                   ;;
+      "ttl"      ) validate_rr_value ttl null "${VALUE}"
+                   ;;
+      "priority" ) validate_rr_value priority null "${VALUE}"
+                   ;;
+      "weight"   ) validate_rr_value weight null "${VALUE}"
+                   ;;
+      "port"     ) validate_rr_value port null "${VALUE}"
+                   ;;
+      *          ) print_error "${KEY} is an unknown key" && exit 1
+                   ;;
+    esac
+  done
+  unset KV_PAIR
+  if [ -z "${RR_TYPE}" ]; then print_error "type=<value> not passed" && exit 1; fi
+  if [ -z "${RR_HOST}" ]; then print_error "host=<value> not passed" && exit 1; fi
+  if [ -z "${RR_RECORD}" ]; then print_error "record=<value> not passed" && exit 1; fi
+  if [ -z "${RR_TTL}" ]; then print_error "ttl=<value> not passed" && exit 1; fi
+  validate_rr_value record "${RR_TYPE}" "${RR_RECORD}"
+}
+
+function validate_rr_value {
+  local CHECK_TYPE="$1"
+  local RECORD_TYPE="$2"
+  shift 2
+  local VALUE="$@"
+  case ${CHECK_TYPE} in
+    "type"     )
+                 ;;
+    "host"     )
+                 ;;
+    "ttl"      )
+                 ;;
+    "priority" )
+                 ;;
+    "weight"   )
+                 ;;
+    "port"     )
+                 ;;
+    "record"   ) case "${RECORD_TYPE}" in
+                   "A"     )
+                             ;;
+                   "CNAME" )
+                             ;;
+                   "MX"    )
+                             ;;
+                   "SPF"   )
+                             ;;
+                   "SRV"   )
+                             ;;
+                   "TXT"   ) return 0
+                             ;;
+                   *       ) return 0
+                             ;;
+                 esac
+                 ;;
+    *          ) return 0
+                 ;;
+  esac
+}
+
+function delete_record {
+  do_tests
+}
+
+function modify_record {
+  do_tests
 }
 
 function add_zone {
