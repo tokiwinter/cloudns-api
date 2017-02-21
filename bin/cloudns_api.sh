@@ -250,13 +250,13 @@ function list_records {
   fi
   local ZONE="$1"
   shift
-  if [ "$#" -gt "2" ]; then
-    print_error "usage: ${THISPROG} listrecords <zone> [type=<type>] [host=<host>]"
+  if [ "$#" -gt "3" ]; then
+    print_error "usage: ${THISPROG} listrecords <zone> [type=<type>] [host=<host>] [showid=<true|false>]"
     exit 1
   fi
   if [ "$#" -gt "0" ]; then
-    local VALID_KEYS=( "type" "host" )
-    local KV_PAIRS="$@" ERROR_COUNT=0
+    local VALID_KEYS=( "type" "host" "showid" )
+    local KV_PAIRS="$@" ERROR_COUNT=0 SHOW_ID="false"
     local KV_PAIR
     for KV_PAIR in ${KV_PAIRS}; do
       ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=[^=]+$'
@@ -271,15 +271,25 @@ function list_records {
         (( ERROR_COUNT = ERROR_COUNT + 1 ))
       fi
       case ${KEY} in
-        "type" ) local -a RECORD_TYPES=( $( get_record_types ) )
-                 local TMPVAR="${VALUE^^}"
-                 if ! has_element RECORD_TYPES "${TMPVAR}"; then
-                   print_error "${VALUE} (${TMPVAR}) is not a valid record type"
-                   exit 1
-                 else
-                   local RECORD_TYPE="${VALUE}"
-                 fi ;;
-        "host" ) local HOST_RECORD="${VALUE}" ;;
+        "type"   ) local -a RECORD_TYPES=( $( get_record_types ) )
+                   local TMPVAR="${VALUE^^}"
+                   if ! has_element RECORD_TYPES "${TMPVAR}"; then
+                     print_error "${VALUE} (${TMPVAR}) is not a valid record type"
+                     exit 1
+                   else
+                     local RECORD_TYPE="${VALUE}"
+                   fi
+                   ;;
+        "host"   ) local HOST_RECORD="${VALUE}"
+                   ;;
+        "showid" ) case ${VALUE} in
+                     "true"|"false" ) SHOW_ID="${VALUE}"
+                                      ;;
+                     *              ) print_error "Invalid value for showid"
+                                      exit 1
+                                      ;;
+                   esac
+                   ;;
       esac
       unset KEY VALUE
     done
@@ -298,15 +308,29 @@ function list_records {
   if [ "${RESULT_LENGTH}" -eq "0" ]; then
     print_error "No matching records found" && exit 1
   else
-    # output records in BIND format
+    local STATUS=$( ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.status' 2>/dev/null )
+    if [ "${STATUS}" = "Failed" ]; then
+      local STATUS_DESC=$( ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.statusDescription' )
+      print_error "Unable to get records for [${ZONE}]: ${STATUS_DESC}" && exit 1
+    fi
+    # output records in BIND format - if showid is true, then add the id as a BIND
+    # style comment
     #
     # note: the CloudDNS records.json API endpoint has no way of filtering for apex
     # records, so we handle this by changing empty hosts to '@', then select-ing based
     # upon that
     if [ "${HOST_RECORD}" = "@" ]; then
-      ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | select(.host == "@") | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
+      if [ "${SHOW_ID}" = "true" ]; then
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | select(.host == "@") | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id'
+      else
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | select(.host == "@") | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
+      fi
     else
-      ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
+      if [ "${SHOW_ID}" = "true" ]; then
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id'
+      else
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
+      fi
     fi
   fi
 }
