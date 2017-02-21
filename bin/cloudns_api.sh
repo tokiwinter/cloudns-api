@@ -9,10 +9,12 @@ GETOPTS="builtin getopts"
 GREP="/usr/bin/grep"
 JQ="/usr/bin/jq"
 SED="/usr/bin/sed"
+SLEEP="/usr/bin/sleep"
 TEST="/usr/bin/test"
 
 API_URL="https://api.cloudns.net/dns"
 DEBUG=0
+REMOVAL_WAIT=5
 SKIP_TESTS=0
 THISPROG=$( ${BASENAME} $0 )
 
@@ -53,14 +55,18 @@ function process_arguments {
                      check_zone "$@"          ;;
     "dumpzone"     ) shift
                      dump_zone "$@"           ;;
-    "zoneinfo"    )  shift
-                     zone_info "$@"           ;;
+    "zonestatus"   ) shift
+                     zone_status "$@"         ;;
+    "nsstatus"   )   shift
+                     ns_status "$@"           ;;
     "addrecord"    ) shift
-                     add_record "$@"          ;;
+                     add_record "$@"          ;; # notimplemented 
     "delrecord"    ) shift
-                     delete_record "$@"       ;;
+                     delete_record "$@"       ;; # notimplemented
+    "modify"    )    shift
+                     modify_record "$@"       ;; # notimplemented
     "listrecords"  ) shift
-                     list_records "$@"        ;;
+                     list_records "$@"        ;; # notimplemented
     *              ) print_usage && exit 1    ;;
   esac
 }
@@ -79,6 +85,10 @@ function check_environment_variables {
   fi
 }
 
+function set_auth_post_data {
+  AUTH_POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
+}
+
 function test_api_url {
   local HTTP_CODE=$( ${CURL} -4qs -o /dev/null -w '%{http_code}' ${API_URL}/login.json )
   if [ "${HTTP_CODE}" != "200" ]; then
@@ -89,8 +99,7 @@ function test_api_url {
 }
 
 function do_login {
-  local POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
-  local STATUS=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/login.json" | ${JQ} -r '.status' )
+  local STATUS=$( ${CURL} -4qs -X POST ${AUTH_POST_DATA} "${API_URL}/login.json" | ${JQ} -r '.status' )
   case ${STATUS} in
     "Success" ) print_debug "Login successful"
                 return 0 ;;
@@ -116,39 +125,132 @@ function check_zone {
   fi
   for ZONE in ${ZONES}; do
     print_debug "Checking zone [${ZONE}]"
-    # Okay. I want to search for a complete zonename. The search functionality
-    # provided by list-zones.json does a partial match - not what I want. I'll
-    # re-use my list_zones function.
-    #local GET_STRING="auth-id=${CLOUDNS_API_ID}&auth-password=${CLOUDNS_PASSWORD}"
-    #GET_STRING="${GET_STRING}&page=1&rows-per-page=${ROWS_PER_PAGE}"
-    #GET_STRING="${GET_STRING}&search=${ZONE}"
-    #${CURL} -4qs -X GET "${API_URL}/list-zones.json&${GET_STRING}"
-    # If you have pages of zones returned by list-zones.json, this will be slow, and
-    # if enough people request it I may refactor.
-    list_zones | ${GREP} -qs "^${ZONE}:"
-    if [ "$?" -eq "0" ]; then
+    local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+    local OUTPUT=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-zone-info.json" )
+    if [ $( ${ECHO} "${OUTPUT}" | ${JQ} -r '.status' ) != "Failed" ]; then
       ${ECHO} "${ZONE}:present"
-      return 0
     else
       ${ECHO} "${ZONE}:absent"
-      return 1
+    fi
+  done
+}
+
+function ns_status {
+  do_tests
+  if [ "$#" -ne "1" ]; then
+    print_error "nsstatus expects exactly one argument" && exit 1
+  fi
+  local ZONE="$1"
+  print_debug "Checking NS status for [${ZONE}]"
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  local NS_STATUS=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/update-status.json" )
+  local STATUS=$( ${ECHO} "${NS_STATUS}" | ${JQ} -r '.status' 2>/dev/null )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "No such domain [${ZONE}]" && exit 1
+  else
+    ${ECHO} "${NS_STATUS}" | ${JQ} -r '.[] | .server + ":" + (.updated|tostring)'
+  fi
+}
+
+function zone_status {
+  do_tests
+  local ZONES="$@"
+  if [ -z "${ZONES}" ]; then
+    print_error "No zones passed to zonestatus" && exit 1
+  fi
+  for ZONE in ${ZONES}; do
+    print_debug "Checking zone status for [${ZONE}]"
+    local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+    local IS_UPDATED=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/is-updated.json" )
+    if [ "${IS_UPDATED}" = "true" ]; then
+      ${ECHO} "${ZONE}:up-to-date"
+    elif [ "${IS_UPDATED}" = "false" ]; then
+      ${ECHO} "${ZONE}:out-of-date"
+    else
+      ${ECHO} "${ZONE}:not-valid"
     fi
   done
 }
 
 function get_page_count {
   # do_tests already called in list_zones
-  local POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
-  POST_DATA="${POST_DATA} -d rows-per-page=${ROWS_PER_PAGE}"
+  local POST_DATA="${AUTH_POST_DATA} -d rows-per-page=${ROWS_PER_PAGE}"
   local PAGE_COUNT=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-pages-count.json" )
   ${ECHO} ${PAGE_COUNT}
 }
+
+function dump_zone {
+  do_tests
+  if [ "$#" -ne "1" ]; then
+    print_error "dumpzone expects exactly one argument" && exit 1
+  fi
+  local ZONE="$1"
+  print_debug "Dumping BIND-format zone file for [${ZONE}]"
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  local ZONE_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/records-export.json" )
+  local STATUS=$( ${ECHO} "${ZONE_DATA}" | ${JQ} -r '.status' )
+  if [ "${STATUS}" = "Success" ]; then
+    ${ECHO} "${ZONE_DATA}" | ${JQ} -r '.zone'
+  else
+    print_error "Unable to get zone file for [${ZONE}]" && exit 1
+  fi
+}
+
+function add_zone {
+  do_tests
+  if [ "$#" -ne "1" ]; then
+    print_error "addzone expects exactly one argument" && exit 1
+  fi
+  local ZONE="$1"
+  local ZONE_TYPE="master" # we only support master zones
+  print_debug "Adding new ${ZONE_TYPE} zone for [${ZONE}]"
+  local POST_DATA="${AUTH_POST_DATA} -d zone-type=${ZONE_TYPE} -d domain-name=${ZONE}"
+  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/register.json" )
+  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
+  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "Failed to add zone [${ZONE}]: ${STATUS_DESC}" && exit 1
+  elif [ "${STATUS}" = "Success" ]; then
+    print_timestamp "New zone [${ZONE}] added"
+  else
+    print_error "Unexpected response while adding zone [${ZONE}]" && exit 1
+  fi
+}
+
+function delete_zone {
+  do_tests
+  if [ "$#" -ne "1" ]; then
+    print_error "delzone expects exactly one argument" && exit 1
+  fi
+  local ZONE="$1"
+  print_debug "Deleting zone [${ZONE}]"
+  ${ECHO} "Are you sure you want to delete zone [${ZONE}]?"
+  ${ECHO} -n "You must type I-AM-SURE, exactly: "
+  local RESPONSE=""
+  builtin read RESPONSE
+  if [ "${RESPONSE}" != "I-AM-SURE" ]; then
+    print_error "Aborting removal of zone [${ZONE}]" && exit 1
+  fi
+  ${ECHO} "Okay. Waiting ${REMOVAL_WAIT}s prior to removal. CTRL-C now if unsure!"
+  ${SLEEP} ${REMOVAL_WAIT}
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/delete.json" )
+  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
+  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "Unable to delete zone [${ZONE}]: ${STATUS_DESC}" && exit 1
+  elif [ "${STATUS}" = "Success" ]; then
+    print_timestamp "Zone [${ZONE}] deleted"
+  else
+    print_error "Unexpected response while deleting zone [${ZONE}]" && exit 1
+  fi
+}
+
 function list_zones {
   do_tests
   local PAGE_COUNT=$( get_page_count )
   local COUNTER=0
-  local POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
-  POST_DATA="${POST_DATA} -d page=0 -d rows-per-page=${ROWS_PER_PAGE}"
+  local POST_DATA="${AUTH_POST_DATA} -d page=0 -d rows-per-page=${ROWS_PER_PAGE}"
   while [ "${COUNTER}" -lt "${PAGE_COUNT}" ]; do
     print_debug "Processing listzones page=$(( ${COUNTER} + 1 )) with rows-per-page=${ROWS_PER_PAGE}"
     POST_DATA=$( ${ECHO} "${POST_DATA}" |\
@@ -187,6 +289,7 @@ if [ "$#" -eq "0" ]; then
 fi
 
 check_environment_variables
+set_auth_post_data
 process_arguments "$@"
 
 exit 0
