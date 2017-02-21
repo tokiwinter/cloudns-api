@@ -20,6 +20,11 @@ THISPROG=$( ${BASENAME} $0 )
 
 ROWS_PER_PAGE=100
 
+# current limitations
+# - does not support sub-auth-id
+# - only supports master zones
+# - only supports forward zones
+
 function print_error {
   ${ECHO} "$( ${DATE} ): Error: $@" >&2
 }
@@ -57,16 +62,20 @@ function process_arguments {
                      dump_zone "$@"           ;;
     "zonestatus"   ) shift
                      zone_status "$@"         ;;
-    "nsstatus"   )   shift
+    "nsstatus"     ) shift
                      ns_status "$@"           ;;
     "addrecord"    ) shift
                      add_record "$@"          ;; # notimplemented 
     "delrecord"    ) shift
                      delete_record "$@"       ;; # notimplemented
-    "modify"    )    shift
+    "modify"       ) shift
                      modify_record "$@"       ;; # notimplemented
     "listrecords"  ) shift
                      list_records "$@"        ;; # notimplemented
+    "getsoa"  )      shift
+                     get_soa "$@"             ;; # notimplemented
+    "setsoa"  )      shift
+                     set_soa "$@"             ;; # notimplemented
     *              ) print_usage && exit 1    ;;
   esac
 }
@@ -172,11 +181,121 @@ function zone_status {
   done
 }
 
+# we don't need to call do_tests in the get_* helper functions, as it
+# will have already been called in the calling function
 function get_page_count {
-  # do_tests already called in list_zones
   local POST_DATA="${AUTH_POST_DATA} -d rows-per-page=${ROWS_PER_PAGE}"
   local PAGE_COUNT=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-pages-count.json" )
-  ${ECHO} ${PAGE_COUNT}
+  local STATUS=$( ${ECHO} "${PAGE_COUNT}" | ${JQ} -r '.status' 2>/dev/null )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "API call to get-pages-count.json failed" && exit 1
+  fi
+  ${ECHO} "${PAGE_COUNT}" | ${GREP} -Eqs '^[[:digit:]]+'
+  if [ "$?" -ne "0" ]; then
+    print_error "Invalid response received from get-pages-count.json" && exit 1
+  fi
+  ${ECHO} "${PAGE_COUNT}"
+}
+
+function get_record_types {
+  local POST_DATA="${AUTH_POST_DATA} -d zone-type=domain"
+  local RECORD_TYPES=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-available-record-types.json" )
+  local STATUS=$( ${ECHO} "${RECORD_TYPES}" | ${JQ} -r '.status' 2>/dev/null )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "API call to get-available-record-types.json failed" && exit 1
+  fi
+  # check for the existence of a common record type, e.g. CNAME
+  local INDEX=$( ${ECHO} "${RECORD_TYPES}" | ${JQ} -r 'index("CNAME")' )
+  if [ "${INDEX}" = "null" ]; then
+    print_error "RECORD_TYPES array does not contain an expected record type"
+    exit 1
+  fi
+  RECORD_TYPES=$( ${ECHO} "${RECORD_TYPES}" | ${JQ} -r '.|join(" ")' )
+  ${ECHO} "${RECORD_TYPES}"
+}
+
+function get_available_ttls {
+  local POST_DATA="${AUTH_POST_DATA}"
+  local TTLS=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-available-ttl.json" )
+  local STATUS=$( ${ECHO} "${TTLS}" | ${JQ} -r '.status' 2>/dev/null )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "API call to get-available-ttl.json failed" && exit 1
+  fi
+  TTLS=$( ${ECHO} "${TTLS}" | ${JQ} -r '[.[]|tostring]|join(" ")' )
+  ${ECHO} "${TTLS}"
+}
+
+function has_element {
+  local -n CHECK_ARRAY="$1"
+  local CHECK_VALUE="$2"
+  for VALUE in ${CHECK_ARRAY[@]}; do
+    if [ "${VALUE}" = "${CHECK_VALUE}" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+function list_records {
+  do_tests
+  if [ "$#" -eq "0" ]; then
+    print_error "listrecords expects at least one argument" && exit 1
+  fi
+  local ZONE="$1"
+  shift
+  if [ "$#" -gt "2" ]; then
+    print_error "usage: ${THISPROG} listrecords <zone> [<type> <host>]"
+    exit 1
+  fi
+  if [ "$#" -gt "0" ]; then
+    local -a RECORD_TYPES=( $( get_record_types ) )
+    local RECORD_TYPE HOST_RECORD
+    while [ "$#" -ne "0" ]; do
+      if [ -n "$1" ]; then
+        local TMPVAR="${1^^}"
+        # pass RECORD_TYPES array by reference
+        if has_element RECORD_TYPES "${TMPVAR}"; then
+          if [ -z "${RECORD_TYPE}" ]; then
+            RECORD_TYPE="$1"
+          else
+            print_error "Multiple record types passed to listrecords"
+            exit 1
+          fi
+        else
+          if [ -z "${HOST_RECORD}" ]; then
+            HOST_RECORD="$1" 
+          else
+            print_error "Multiple hostnames passed to listrecords or invalid record type specified"
+            exit 1
+          fi
+        fi
+      fi
+      shift
+    done
+  fi
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  if [ -n "${RECORD_TYPE}" ]; then
+    POST_DATA="${POST_DATA} -d type=${RECORD_TYPE}"
+  fi
+  if [ -n "${HOST_RECORD}" -a "${HOST_RECORD}" != "@" ]; then
+    POST_DATA="${POST_DATA} -d host=${HOST_RECORD}"
+  fi
+  local RECORD_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/records.json" )
+  local RESULT_LENGTH=$( ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.|length' )
+  if [ "${RESULT_LENGTH}" -eq "0" ]; then
+    print_error "No matching records found" && exit 1
+  else
+    # output records in BIND format
+    #
+    # note: the CloudDNS records.json API endpoint has no way of filtering for apex
+    # records, so we handle this by changing empty hosts to '@', then select-ing based
+    # upon that
+    if [ "${HOST_RECORD}" = "@" ]; then
+      ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | select(.host == "@") | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
+    else
+      ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
+    fi
+  fi
 }
 
 function dump_zone {
