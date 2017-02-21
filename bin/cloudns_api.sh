@@ -73,7 +73,7 @@ function process_arguments {
     "listrecords"  ) shift
                      list_records "$@"        ;;
     "getsoa"  )      shift
-                     get_soa "$@"             ;; # notimplemented
+                     get_soa "$@"             ;;
     "setsoa"  )      shift
                      set_soa "$@"             ;; # notimplemented
     *              ) print_usage && exit 1    ;;
@@ -303,6 +303,24 @@ function get_soa {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "getsoa expects exactly one argument" && exit 1
+  fi
+  local ZONE="$1"
+  print_debug "Retrieving SOA details for [${ZONE}]"
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  local SOA_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/soa-details.json" )
+  local STATUS=$( ${ECHO} "${SOA_DATA}" | ${JQ} -r '.status' 2>/dev/null )
+  if [ "${STATUS}" = "Failed" ]; then
+    local STATUS_DESC=$( ${ECHO} "${SOA_DATA}" | ${JQ} -r '.statusDescription' )
+    print_error "Unable to get SOA for [${ZONE}]: ${STATUS_DESC}" && exit 1
+  fi
+  ${ECHO} "${SOA_DATA}" | ${JQ} -r 'to_entries[] | .key + ":" + .value'
+}
+
+function set_soa {
+  do_tests
+  if [ "$#" -eq "0" ]; then
+    print_error "usage: ${THISPROG} setsoa <domain> key=value [key=value,...]"
+    exit 1
   fi
 }
 
