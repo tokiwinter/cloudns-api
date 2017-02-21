@@ -1,7 +1,9 @@
 #!/bin/bash
 
+AWK="/usr/bin/awk"
 BASENAME="/usr/bin/basename"
 CURL="/usr/bin/curl"
+CUT="/usr/bin/cut"
 DATE="/usr/bin/date"
 ECHO="builtin echo"
 EVAL="builtin eval"
@@ -72,10 +74,12 @@ function process_arguments {
                      modify_record "$@"       ;; # notimplemented
     "listrecords"  ) shift
                      list_records "$@"        ;;
-    "getsoa"  )      shift
+    "getsoa"       ) shift
                      get_soa "$@"             ;;
-    "setsoa"  )      shift
+    "setsoa"       ) shift
                      set_soa "$@"             ;; # notimplemented
+    "helper"       ) shift
+                     call_helper "$@"         ;;
     *              ) print_usage && exit 1    ;;
   esac
 }
@@ -228,6 +232,7 @@ function get_available_ttls {
 function has_element {
   local -n CHECK_ARRAY="$1"
   local CHECK_VALUE="$2"
+  local VALUE
   for VALUE in ${CHECK_ARRAY[@]}; do
     if [ "${VALUE}" = "${CHECK_VALUE}" ]; then
       return 0
@@ -244,33 +249,37 @@ function list_records {
   local ZONE="$1"
   shift
   if [ "$#" -gt "2" ]; then
-    print_error "usage: ${THISPROG} listrecords <zone> [<type> <host>]"
+    print_error "usage: ${THISPROG} listrecords <zone> [type=<type>] [host=<host>]"
     exit 1
   fi
   if [ "$#" -gt "0" ]; then
-    local -a RECORD_TYPES=( $( get_record_types ) )
-    local RECORD_TYPE HOST_RECORD
-    while [ "$#" -ne "0" ]; do
-      if [ -n "$1" ]; then
-        local TMPVAR="${1^^}"
-        # pass RECORD_TYPES array by reference
-        if has_element RECORD_TYPES "${TMPVAR}"; then
-          if [ -z "${RECORD_TYPE}" ]; then
-            RECORD_TYPE="$1"
-          else
-            print_error "Multiple record types passed to listrecords"
-            exit 1
-          fi
-        else
-          if [ -z "${HOST_RECORD}" ]; then
-            HOST_RECORD="$1" 
-          else
-            print_error "Multiple hostnames passed to listrecords or invalid record type specified"
-            exit 1
-          fi
-        fi
+    local VALID_KEYS=( "type" "host" )
+    local KV_PAIRS="$@" ERROR_COUNT=0
+    local KV_PAIR
+    for KV_PAIR in ${KV_PAIRS}; do
+      ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=[^=]+$'
+      if [ "$?" -ne "0" ]; then
+        print_error "key-value pair [${KV_PAIR}] not incorrect format" && exit 1
       fi
-      shift
+      local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
+      local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+      print_debug "Checking key-value pair: ${KEY}=${VALUE}"
+      if ! has_element VALID_KEYS "${KEY}"; then
+        print_error "${KEY} is not a valid key"
+        (( ERROR_COUNT = ERROR_COUNT + 1 ))
+      fi
+      case ${KEY} in
+        "type" ) local -a RECORD_TYPES=( $( get_record_types ) )
+                 local TMPVAR="${VALUE^^}"
+                 if ! has_element RECORD_TYPES "${TMPVAR}"; then
+                   print_error "${VALUE} (${TMPVAR}) is not a valid record type"
+                   exit 1
+                 else
+                   local RECORD_TYPE="${VALUE}"
+                 fi ;;
+        "host" ) local HOST_RECORD="${VALUE}" ;;
+      esac
+      unset KEY VALUE
     done
   fi
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
@@ -318,10 +327,189 @@ function get_soa {
 
 function set_soa {
   do_tests
-  if [ "$#" -eq "0" ]; then
-    print_error "usage: ${THISPROG} setsoa <domain> key=value [key=value,...]"
+  if [ "$#" -lt "2" ]; then
+    print_error "usage: ${THISPROG} setsoa <domain> key=value [key=value key=value ...]"
     exit 1
   fi
+  local ZONE="$1"
+  print_debug "Modifying SOA record for zone [${ZONE}]"
+  shift
+  local VALID_KEYS=( "primary-ns" "admin-mail" "refresh" "retry" "expire" "default-ttl" )
+  local KV_PAIRS="$@" ERROR_COUNT=0
+  local KV_PAIR
+  for KV_PAIR in ${KV_PAIRS}; do
+    ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=[^=]+$'
+    if [ "$?" -ne "0" ]; then
+      print_error "key-value pair [${KV_PAIR}] not incorrect format" && exit 1
+    fi
+    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
+    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    print_debug "Checking key-value pair: ${KEY}=${VALUE}"
+    if ! has_element VALID_KEYS "${KEY}"; then
+      print_error "${KEY} is not a valid key"
+      (( ERROR_COUNT = ERROR_COUNT + 1 ))
+    fi
+    unset KEY VALUE
+  done
+  unset KV_PAIR
+  [[ "${ERROR_COUNT}" -gt "0" ]] && exit 1
+  # modify-soa.json expects ALL parameters to be set. We will pre-populate via
+  # a call to get_soa()
+  local SOA_DATA=$( get_soa "${ZONE}" )
+  local PRIMARY_NS=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "primaryNS" { print $2 }' )
+  local ADMIN_MAIL=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "adminMail" { print $2 }' )
+  local REFRESH=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "refresh" { print $2 }' )
+  local RETRY=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "retry" { print $2 }' )
+  local EXPIRE=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "expire" { print $2 }' )
+  local DEFAULT_TTL=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "defaultTTL" { print $2 }' )
+  print_debug "Initial SOA paramters loaded via get_soa():"
+  print_debug "--> PRIMARY_NS: ${PRIMARY_NS}"
+  print_debug "--> ADMIN_MAIL: ${ADMIN_MAIL}"
+  print_debug "--> REFRESH: ${REFRESH}"
+  print_debug "--> RETRY: ${RETRY}"
+  print_debug "--> EXPIRE: ${EXPIRE}"
+  print_debug "--> DEFAULT_TTL: ${DEFAULT_TTL}"
+  local CHANGED=0
+  for KV_PAIR in ${KV_PAIRS}; do
+    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
+    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    # no default required in case as we've already checked against VALID_KEYS
+    case ${KEY} in
+      "primary-ns"  ) validate_soa_value ns "${VALUE}"
+                      if [ "$?" -ne "0" ]; then
+                        print_error "Validation of primary-ns failed" && exit 1
+                      else
+                        if [ "${PRIMARY_NS}" = "${VALUE}" ]; then
+                          print_timestamp "primary-ns value same as existing"
+                        else
+                          PRIMARY_NS="${VALUE}"
+                          (( CHANGED = CHANGED + 1 ))
+                        fi
+                      fi
+                      ;;
+      "admin-mail"  ) validate_soa_value email "${VALUE}"
+                      if [ "$?" -ne "0" ]; then
+                        print_error "Validation of admin-mail failed" && exit 1
+                      else
+                        if [ "${ADMIN_MAIL}" = "${VALUE}" ]; then
+                          print_timestamp "admin-mail value same as existing"
+                        else
+                          ADMIN_MAIL="${VALUE}"
+                          (( CHANGED = CHANGED + 1 ))
+                        fi
+                      fi
+                      ;;
+      "refresh"     ) validate_soa_value refresh "${VALUE}"
+                      if [ "$?" -ne "0" ]; then
+                        print_error "Validation of refresh failed" && exit 1
+                      else
+                        if [ "${REFRESH}" = "${VALUE}" ]; then
+                          print_timestamp "refresh value same as existing"
+                        else
+                          REFRESH="${VALUE}"
+                          (( CHANGED = CHANGED + 1 ))
+                        fi
+                      fi
+                      ;;
+      "retry"       ) validate_soa_value retry "${VALUE}"
+                      if [ "$?" -ne "0" ]; then
+                        print_error "Validation of retry failed" && exit 1
+                      else
+                        if [ "${RETRY}" = "${VALUE}" ]; then
+                          print_timestamp "retry value same as existing"
+                        else
+                          RETRY="${VALUE}"
+                          (( CHANGED = CHANGED + 1 ))
+                        fi
+                      fi
+                      ;;
+      "expire"      ) validate_soa_value expire "${VALUE}"
+                      if [ "$?" -ne "0" ]; then
+                        print_error "Validation of expire failed" && exit 1
+                      else
+                        if [ "${EXPIRE}" = "${VALUE}" ]; then
+                          print_timestamp "expire value same as existing"
+                        else
+                          EXPIRE="${VALUE}"
+                          (( CHANGED = CHANGED + 1 ))
+                        fi
+                      fi
+                      ;;
+      "default-ttl" ) validate_soa_value ttl "${VALUE}"
+                      if [ "$?" -ne "0" ]; then
+                        print_error "Validation of default-ttl failed" && exit 1
+                      else
+                        if [ "${DEFAULT_TTL}" = "${VALUE}" ]; then
+                          print_timestamp "default-ttl value same as existing"
+                        else
+                          DEFAULT_TTL="${VALUE}"
+                          (( CHANGED = CHANGED + 1 ))
+                        fi
+                      fi
+                      ;;
+    esac
+  done 
+  if [ "${CHANGED}" -eq "0" ]; then
+    print_timestamp "Nothing has changed - no need to modify" && exit 0
+  fi
+  print_debug "SOA paramters loaded after modification:"
+  print_debug "--> PRIMARY_NS: ${PRIMARY_NS}"
+  print_debug "--> ADMIN_MAIL: ${ADMIN_MAIL}"
+  print_debug "--> REFRESH: ${REFRESH}"
+  print_debug "--> RETRY: ${RETRY}"
+  print_debug "--> EXPIRE: ${EXPIRE}"
+  print_debug "--> DEFAULT_TTL: ${DEFAULT_TTL}"
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  POST_DATA="${POST_DATA} -d primary-ns=${PRIMARY_NS}"
+  POST_DATA="${POST_DATA} -d admin-mail=${ADMIN_MAIL}"
+  POST_DATA="${POST_DATA} -d refresh=${REFRESH}"
+  POST_DATA="${POST_DATA} -d retry=${RETRY}"
+  POST_DATA="${POST_DATA} -d expire=${EXPIRE}"
+  POST_DATA="${POST_DATA} -d default-ttl=${DEFAULT_TTL}"
+  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/modify-soa.json" )
+  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
+  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "Failed to modify SOA for zone [${ZONE}]: ${STATUS_DESC}" && exit 1
+  elif [ "${STATUS}" = "Success" ]; then
+    print_timestamp "SOA for zone [${ZONE}] modified"
+  else
+    print_error "Unexpected response while modifiying SOA for zone [${ZONE}]" && exit 1
+  fi
+}
+
+function check_integer {
+  local VALUE="$1"
+  local LOWER="$2"
+  local UPPER="$3"
+  ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[[:digit:]]+' || return 1
+  if [ "${VALUE}" -ge "${LOWER}" -a "${VALUE}" -le "${UPPER}" ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function validate_soa_value {
+  # see https://www.cloudns.net/wiki/article/63/ for permissible integer values
+  local TYPE="$1"
+  local VALUE="$2"
+  case ${TYPE} in
+    "ns"      ) # check for at least something.something
+                ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-z0-9-]+\.[a-z0-9-]+'
+                return $? ;;
+    "email"   ) # check for at least something@something
+                ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[^@]+@[^@]+$'
+                return $? ;;
+    "refresh" ) check_integer ${VALUE} 1200 43200
+                return $? ;;
+    "retry"   ) check_integer ${VALUE} 180 2419200
+                return $? ;;
+    "expire"  ) check_integer ${VALUE} 1209600 2419200
+                return $? ;;
+    "ttl"     ) check_integer ${VALUE} 60 2419200
+                return $? ;;
+  esac
 }
 
 function dump_zone {
@@ -404,6 +592,22 @@ function list_zones {
     ${ECHO} "${OUTPUT}" | ${JQ} -r '.[] | .name + ":" + .type'
     (( COUNTER = COUNTER + 1 ))
   done
+}
+
+function call_helper {
+  do_tests
+  if [ "$#" -ne "1" ]; then
+    print_error "helper expects exactly one argument" && exit 1
+  fi
+  local HELPER_FUNCTION="$1"
+  print_debug "Calling helper function ${HELPER_FUNCTION}()"
+  case ${HELPER_FUNCTION} in
+    "get_available_ttls" ) get_available_ttls ;;
+    "get_record_types"   ) get_record_types   ;;
+    "get_page_count"     ) get_page_count     ;;
+    *                    ) print_error "No such helper function ${HELPER_FUNCTION}"
+                           exit 1             ;;
+  esac
 }
 
 function test_login {
