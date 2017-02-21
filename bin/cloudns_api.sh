@@ -71,7 +71,7 @@ function process_arguments {
     "modify"       ) shift
                      modify_record "$@"       ;; # notimplemented
     "listrecords"  ) shift
-                     list_records "$@"        ;; # notimplemented
+                     list_records "$@"        ;;
     "getsoa"  )      shift
                      get_soa "$@"             ;; # notimplemented
     "setsoa"  )      shift
@@ -280,6 +280,7 @@ function list_records {
   if [ -n "${HOST_RECORD}" -a "${HOST_RECORD}" != "@" ]; then
     POST_DATA="${POST_DATA} -d host=${HOST_RECORD}"
   fi
+  print_debug "Fetching records for zone [${ZONE}] with type [${RECORD_TYPE:-not set}] and host [${HOST_RECORD:-not set}]"
   local RECORD_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/records.json" )
   local RESULT_LENGTH=$( ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.|length' )
   if [ "${RESULT_LENGTH}" -eq "0" ]; then
@@ -295,6 +296,13 @@ function list_records {
     else
       ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
     fi
+  fi
+}
+
+function get_soa {
+  do_tests
+  if [ "$#" -ne "1" ]; then
+    print_error "getsoa expects exactly one argument" && exit 1
   fi
 }
 
