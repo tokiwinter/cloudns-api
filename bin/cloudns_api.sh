@@ -2,6 +2,7 @@
 
 AWK="/usr/bin/awk"
 BASENAME="/usr/bin/basename"
+CAT="/usr/bin/cat"
 CURL="/usr/bin/curl"
 CUT="/usr/bin/cut"
 DATE="/usr/bin/date"
@@ -14,6 +15,7 @@ SED="/usr/bin/sed"
 SLEEP="/usr/bin/sleep"
 TEST="/usr/bin/test"
 TR="/usr/bin/tr"
+WC="/usr/bin/wc"
 
 API_URL="https://api.cloudns.net/dns"
 DEBUG=0
@@ -331,7 +333,7 @@ function list_records {
     fi
     if [ "${HOST_RECORD}" = "@" ]; then
       if [ "${SHOW_ID}" = "true" ]; then
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else .  end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else .  end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else .  end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else .  end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else .  end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
       else
         ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
       fi
@@ -666,8 +668,9 @@ function add_record {
     if [ ! -f "${RR_RECORD}" ]; then
       print_error "Unable to load record data from [${RR_RECORD}]" && exit 1
     else
-      # check number of lines
-      RR_RECORD=$( ${CAT} ${RR_RECORD} )
+      if [ "$( ${WC} -l ${RR_RECORD} | ${AWK} '{ print $1 }' )" -ne "1" ]; then
+        print_error "Input file [${RR_RECORD}] has more than one line" && exit 1
+      fi
     fi
   else
     if ! validate_rr_value record "${RR_TYPE}" "${RR_RECORD}"; then
@@ -699,7 +702,6 @@ function add_record {
   POST_DATA="${POST_DATA} -d record-type=${RR_TYPE}"
   POST_DATA="${POST_DATA} -d ttl=${RR_TTL}"
   POST_DATA="${POST_DATA} -d host=${RR_HOST}"
-  POST_DATA="${POST_DATA} -d record=${RR_RECORD}"
   if [ -n "${RR_PRIORITY}" ]; then
     if [ "${RR_TYPE}" = "MX" -o "${RR_TYPE}" = "SRV" ]; then
       POST_DATA="${POST_DATA} -d priority=${RR_PRIORITY}"
@@ -724,8 +726,12 @@ function add_record {
       exit 1
     fi
   fi
-  print_debug "POST_DATA as follows: $( ${ECHO} ${POST_DATA} | ${SED} 's/^\(.*auth-password=\)[^ ]* \(.*$\)/\1xxxxxxxx \2/' )"
-  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/add-record.json" )
+  if [ "${RR_TYPE}" = "TXT" -o "${RR_TYPE}" = "SPF" ]; then
+    local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} --data-binary @<( ${ECHO} -ne "record=\"" | ${CAT} - ${RR_RECORD} <( ${ECHO} -ne "\"" ) | ${TR} -d '\n' ) "${API_URL}/add-record.json" )
+  else
+    POST_DATA="${POST_DATA} -d record=${RR_RECORD}"
+    local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/add-record.json" )
+  fi
   local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
   local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
   if [ "${STATUS}" = "Failed" ]; then
