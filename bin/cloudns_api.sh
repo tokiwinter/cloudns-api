@@ -13,9 +13,11 @@ JQ="/usr/bin/jq"
 SED="/usr/bin/sed"
 SLEEP="/usr/bin/sleep"
 TEST="/usr/bin/test"
+TR="/usr/bin/tr"
 
 API_URL="https://api.cloudns.net/dns"
 DEBUG=0
+JSON=0
 REMOVAL_WAIT=5
 SKIP_TESTS=0
 THISPROG=$( ${BASENAME} $0 )
@@ -319,17 +321,25 @@ function list_records {
     # note: the CloudDNS records.json API endpoint has no way of filtering for apex
     # records, so we handle this by changing empty hosts to '@', then select-ing based
     # upon that
+    if [ "${JSON}" -eq "1" ]; then
+      if [ "${HOST_RECORD}" = "@" ]; then
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.[] | select(.host == "")'
+      else
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.'
+      fi
+      exit 0
+    fi
     if [ "${HOST_RECORD}" = "@" ]; then
       if [ "${SHOW_ID}" = "true" ]; then
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | select(.host == "@") | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else .  end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else .  end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else .  end) | .[] | select(.host == "@") | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id'
       else
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | select(.host == "@") | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | select(.host == "@") | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
       fi
     else
       if [ "${SHOW_ID}" = "true" ]; then
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id'
       else
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | .host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record'
       fi
     fi
   fi
@@ -509,7 +519,7 @@ function check_integer {
   local VALUE="$1"
   local LOWER="$2"
   local UPPER="$3"
-  ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[[:digit:]]+' || return 1
+  ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[[:digit:]]+$' || return 1
   if [ "${VALUE}" -ge "${LOWER}" -a "${VALUE}" -le "${UPPER}" ]; then
     return 0
   else
@@ -590,22 +600,53 @@ function add_record {
     local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
     local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
     case ${KEY} in
-      "type"     ) validate_rr_value type null "${VALUE}"
+      "type"     ) local TMPVAR="${VALUE^^}"
+                   if validate_rr_value type null "${TMPVAR}"; then
+                     RR_TYPE="${TMPVAR}"
+                   else
+                     print_error "Unsupported record type [${TMPVAR}]"
+                     exit 1
+                   fi
                    ;;
-      "host"     ) validate_rr_value host null "${VALUE}"
+      "host"     ) if validate_rr_value host null "${VALUE}"; then
+                     RR_HOST="${VALUE}"
+                   else
+                     print_error "Incorrectly formatted host [${VALUE}]"
+                     exit 1
+                   fi
                    ;;
       "record"   ) # record validation happens at end of the for loop, as we
                    # need RR_TYPE to be set, and params could be passed in any
                    # order
                    RR_RECORD="${VALUE}"
                    ;;
-      "ttl"      ) validate_rr_value ttl null "${VALUE}"
+      "ttl"      ) if validate_rr_value ttl null "${VALUE}"; then
+                     RR_TTL="${VALUE}"
+                   else
+                     print_error "Invalid TTL [${VALUE}]"
+                     exit 1
+                   fi
                    ;;
-      "priority" ) validate_rr_value priority null "${VALUE}"
+      "priority" ) if validate_rr_value priority null "${VALUE}"; then
+                     RR_PRIORITY="${VALUE}"
+                   else
+                     print_error "Invalid priority [${VALUE}]"
+                     exit 1
+                   fi
                    ;;
-      "weight"   ) validate_rr_value weight null "${VALUE}"
+      "weight"   ) if validate_rr_value weight null "${VALUE}"; then
+                     RR_WEIGHT="${VALUE}"
+                   else
+                     print_error "Invalid weight [${VALUE}]"
+                     exit 1
+                   fi
                    ;;
-      "port"     ) validate_rr_value port null "${VALUE}"
+      "port"     ) if validate_rr_value port null "${VALUE}"; then
+                     RR_PORT="${VALUE}"
+                   else
+                     print_error "Invalid port [${VALUE}]"
+                     exit 1
+                   fi
                    ;;
       *          ) print_error "${KEY} is an unknown key" && exit 1
                    ;;
@@ -616,7 +657,100 @@ function add_record {
   if [ -z "${RR_HOST}" ]; then print_error "host=<value> not passed" && exit 1; fi
   if [ -z "${RR_RECORD}" ]; then print_error "record=<value> not passed" && exit 1; fi
   if [ -z "${RR_TTL}" ]; then print_error "ttl=<value> not passed" && exit 1; fi
-  validate_rr_value record "${RR_TYPE}" "${RR_RECORD}"
+  if [ "${RR_TYPE}" = "TXT" -o "${RR_TYPE}" = "SPF" ]; then
+    # in the case of TXT or SPF records, the record data will most likely
+    # contain spaces, and all kinds of other characters. As this is a humble
+    # shell script, parsing that as a key=value pair would be horrendous, if
+    # not impossible. So, we load the record data from a file.
+    print_debug "Attempting to load record data for ${RR_TYPE} record from [${RR_RECORD}]"
+    if [ ! -f "${RR_RECORD}" ]; then
+      print_error "Unable to load record data from [${RR_RECORD}]" && exit 1
+    else
+      # check number of lines
+      RR_RECORD=$( ${CAT} ${RR_RECORD} )
+    fi
+  else
+    if ! validate_rr_value record "${RR_TYPE}" "${RR_RECORD}"; then
+      print_error "record validation failed" && exit 1
+    fi
+  fi
+  if [ "${RR_TYPE}" = "MX" ]; then
+    if [ -z "${RR_PRIORITY}" ]; then
+      print_error "priority mandatory for MX records" && exit 1
+    fi
+  fi
+  if [ "${RR_TYPE}" = "SRV" ]; then
+    local ERROR_COUNT=0
+    if [ -z "${RR_PRIORITY}" ]; then
+      print_error "priority mandatory for SRV records" && exit 1
+      (( ERROR_COUNT = ERROR_COUNT + 1 ))
+    fi
+    if [ -z "${RR_WEIGHT}" ]; then
+      print_error "weight mandatory for SRV records" && exit 1
+      (( ERROR_COUNT = ERROR_COUNT + 1 ))
+    fi
+    if [ -z "${RR_PORT}" ]; then
+      print_error "port mandatory for SRV records" && exit 1
+      (( ERROR_COUNT = ERROR_COUNT + 1 ))
+    fi
+    [[ "${ERROR_COUNT}" -gt "0" ]] && exit 1
+  fi
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  POST_DATA="${POST_DATA} -d record-type=${RR_TYPE}"
+  POST_DATA="${POST_DATA} -d ttl=${RR_TTL}"
+  POST_DATA="${POST_DATA} -d host=${RR_HOST}"
+  POST_DATA="${POST_DATA} -d record=${RR_RECORD}"
+  if [ -n "${RR_PRIORITY}" ]; then
+    if [ "${RR_TYPE}" = "MX" -o "${RR_TYPE}" = "SRV" ]; then
+      POST_DATA="${POST_DATA} -d priority=${RR_PRIORITY}"
+    else
+      print_error "priority specified for type other than MX or SRV"
+      exit 1
+    fi
+  fi
+  if [ -n "${RR_WEIGHT}" ]; then
+    if [ "${RR_TYPE}" = "SRV" ]; then
+      POST_DATA="${POST_DATA} -d weight=${RR_WEIGHT}"
+    else
+      print_error "weight specified for type other than SRV"
+      exit 1
+    fi
+  fi
+  if [ -n "${RR_PORT}" ]; then
+    if [ "${RR_TYPE}" = "SRV" ]; then
+      POST_DATA="${POST_DATA} -d port=${RR_PORT}"
+    else
+      print_error "port specified for type other than SRV"
+      exit 1
+    fi
+  fi
+  print_debug "POST_DATA as follows: $( ${ECHO} ${POST_DATA} | ${SED} 's/^\(.*auth-password=\)[^ ]* \(.*$\)/\1xxxxxxxx \2/' )"
+  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/add-record.json" )
+  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
+  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "Failed to add record: ${STATUS_DESC}" && exit 1
+  elif [ "${STATUS}" = "Success" ]; then
+    print_timestamp "Record succesfully added"
+  else
+    print_error "Unexpected response while adding record" && exit 1
+  fi 
+}
+
+function check_ipv4_address {
+  local IP="$1"
+  local NUM_PARTS=$( ${ECHO} "${IP}" | ${AWK} -F . '{ print NF }' )
+  if [ "${NUM_PARTS}" -ne "4" ]; then
+    return 1
+  else
+    for OCTET in $( ${ECHO} "${IP}" | ${TR} '.' ' ' ); do
+      check_integer "${OCTET}" 0 255
+      if [ "$?" -ne "0" ]; then
+        return 1
+      fi
+    done
+  fi
+  return 0
 }
 
 function validate_rr_value {
@@ -625,28 +759,56 @@ function validate_rr_value {
   shift 2
   local VALUE="$@"
   case ${CHECK_TYPE} in
-    "type"     )
+    "type"     ) # we need to check two things here:
+                 # 1) is our record type returned by get_record_types
+                 # 2) is our record type in SUPPORTED_RECORD_TYPES
+                 local -a RECORD_TYPES=( $( get_record_types ) )
+                 if has_element RECORD_TYPES "${VALUE}"; then
+                   if has_element SUPPORTED_RECORD_TYPES "${VALUE}"; then
+                     return 0
+                   else
+                     return 1
+                   fi
+                 else
+                   return 1
+                 fi 
                  ;;
-    "host"     )
+    "host"     ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\._@-]+$'
+                 return $?
                  ;;
-    "ttl"      )
+    "ttl"      ) local -a AVAILABLE_TTLS=( $( get_available_ttls ) )
+                 if has_element AVAILABLE_TTLS "${VALUE}"; then
+                   return 0
+                 else
+                   return 1
+                 fi
                  ;;
-    "priority" )
+    "priority" ) check_integer "${VALUE}" 0 65535
+                 return $?
                  ;;
-    "weight"   )
+    "weight"   ) check_integer "${VALUE}" 0 65535
+                 return $?
                  ;;
-    "port"     )
+    "port"     ) check_integer "${VALUE}" 0 65535
+                 return $?
                  ;;
     "record"   ) case "${RECORD_TYPE}" in
-                   "A"     )
+                   "A"     ) check_ipv4_address "${VALUE}"
+                             return $?
                              ;;
-                   "CNAME" )
+                   "CNAME" ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\.-]+$'
+                             return $?
                              ;;
-                   "MX"    )
+                   "MX"    ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\.-]+$'
+                             return $?
                              ;;
-                   "SPF"   )
+                   "NS"    ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\.-]+$'
+                             return $?
                              ;;
-                   "SRV"   )
+                   "SPF"   ) return 0
+                             ;;
+                   "SRV"   ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\.-]+$'
+                             return $?
                              ;;
                    "TXT"   ) return 0
                              ;;
@@ -760,10 +922,11 @@ function test_login {
   fi
 }
 
-while ${GETOPTS} ":dhs" OPTION; do
+while ${GETOPTS} ":dhjs" OPTION; do
   case ${OPTION} in
     "d") DEBUG=1               ;;
     "h") print_usage && exit 0 ;;
+    "j") JSON=1                ;;
     "s") SKIP_TESTS=1          ;;
     *  ) print_usage && exit 1 ;;
   esac
