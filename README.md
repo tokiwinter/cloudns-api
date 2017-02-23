@@ -288,7 +288,7 @@ Modify an existing resource record. You must specify at least one attribute to m
 must know the record id (use the `listrecords` command to obtain this). The key=value pairs
 are the same as with `addrecord`. You cannot modify a record's `type`, so don't try that.
 If you want to change `record` for an SPF or TXT record, the same loading-from-file
-mechanism as with `addrecord` applies to `modify` to.
+mechanism as with `addrecord` applies to `modify` too.
 
 You can modify as many attributes as you want in a single invocation. If you specify the
 same attribute twice, the latest specification will be used. The order of attribute specification
