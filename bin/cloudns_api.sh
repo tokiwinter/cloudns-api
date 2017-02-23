@@ -295,7 +295,7 @@ function list_records {
     exit 1
   fi
   if [ "$#" -gt "0" ]; then
-    local VALID_KEYS=( "type" "host" "showid" )
+    local -a VALID_KEYS=( "type" "host" "showid" )
     local KV_PAIRS="$@" ERROR_COUNT=0 SHOW_ID="false"
     local KV_PAIR
     for KV_PAIR in ${KV_PAIRS}; do
@@ -412,7 +412,7 @@ function set_soa {
   fi
   print_debug "Modifying SOA record for zone [${ZONE}]"
   shift
-  local VALID_KEYS=( "primary-ns" "admin-mail" "refresh" "retry" "expire" "default-ttl" )
+  local -a VALID_KEYS=( "primary-ns" "admin-mail" "refresh" "retry" "expire" "default-ttl" )
   local KV_PAIRS="$@" ERROR_COUNT=0
   local KV_PAIR
   for KV_PAIR in ${KV_PAIRS}; do
