@@ -65,6 +65,18 @@ Usage
 Environment
 -----------
 
+You should ensure that you export the following environment variables correctly. Their
+existence is tested by the script.
+
+    $ export CLOUDNS_API_ID=<your_auth-id>
+    $ export CLOUDNS_PASSWORD=<your_auth-password>
+
+The script does not currently support sub-auth-id, etc. See Limitations at the end of
+this document.
+
+Using the script
+----------------
+
 Limitations
 -----------
 
