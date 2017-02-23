@@ -193,6 +193,11 @@ function ns_status {
     print_error "nsstatus expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
+  fi
   print_debug "Checking NS status for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
   local NS_STATUS=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/update-status.json" )
@@ -288,6 +293,11 @@ function list_records {
   local ZONE="$1"
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
   fi
   shift
   if [ "$#" -gt "3" ]; then
@@ -389,6 +399,11 @@ function get_soa {
     print_error "getsoa expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
+  fi
   print_debug "Retrieving SOA details for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
   local SOA_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/soa-details.json" )
@@ -409,6 +424,11 @@ function set_soa {
   local ZONE="$1"
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
   fi
   print_debug "Modifying SOA record for zone [${ZONE}]"
   shift
@@ -597,6 +617,11 @@ function dump_zone {
     print_error "dumpzone expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
+  fi
   print_debug "Dumping BIND-format zone file for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
   local ZONE_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/records-export.json" )
@@ -617,6 +642,11 @@ function add_record {
   local ZONE="$1"
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
   fi
   shift
   local -a VALID_KEYS=( "type" "host" "record" "ttl" "priority" "weight" "port" )
@@ -880,6 +910,11 @@ function delete_record {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
+  fi
   shift
   local ID_KV="$1"
   local ID_K=$( ${ECHO} "${ID_KV}" | ${CUT} -d = -f 1 )
@@ -932,6 +967,11 @@ function modify_record {
   local ZONE="$1"
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
   fi
   shift
   local -a VALID_KEYS=( "id" "host" "record" "ttl" "priority" "weight" "port" )
@@ -1078,36 +1118,48 @@ function modify_record {
     [[ "${RR_HOST}" != "${GOT_HOST}" ]] && {
       GOT_HOST="${RR_HOST}"
       (( CHANGED = CHANGED + 1 ))
+    } || {
+      print_timestamp "host value same as existing"
     }
   }
   [[ -n "${RR_TTL}" ]] && {
     [[ "${RR_TTL}" != "${GOT_TTL}" ]] && {
       GOT_TTL="${RR_TTL}"
       (( CHANGED = CHANGED + 1 ))
+    } || {
+      print_timestamp "ttl value same as existing"
     }
   }
   [[ -n "${RR_RECORD}" ]] && {
     [[ "${RR_RECORD}" != "${GOT_RECORD}" ]] && {
       GOT_RECORD="${RR_RECORD}"
       (( CHANGED = CHANGED + 1 ))
+    } || {
+      print_timestamp "record value same as existing"
     }
   }
   [[ -n "${RR_PRIORITY}" ]] && {
     [[ "${RR_PRIORITY}" != "${GOT_PRIORITY}" ]] && {
       GOT_PRIORITY="${RR_PRIORITY}"
       (( CHANGED = CHANGED + 1 ))
+    } || {
+      print_timestamp "priority value same as existing"
     }
   }
   [[ -n "${RR_WEIGHT}" ]] && {
     [[ "${RR_WEIGHT}" != "${GOT_WEIGHT}" ]] && {
       GOT_WEIGHT="${RR_WEIGHT}"
       (( CHANGED = CHANGED + 1 ))
+    } || {
+      print_timestamp "weight value same as existing"
     }
   }
   [[ -n "${RR_PORT}" ]] && {
     [[ "${RR_PORT}" != "${GOT_PORT}" ]] && {
       GOT_PORT="${RR_PORT}"
       (( CHANGED = CHANGED + 1 ))
+    } || {
+      print_timestamp "port value same as existing"
     }
   }
   [[ "${CHANGED}" -eq "0" ]] && {
