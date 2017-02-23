@@ -76,9 +76,9 @@ function process_arguments {
     "addrecord"    ) shift
                      add_record "$@"          ;;
     "delrecord"    ) shift
-                     delete_record "$@"       ;; # notimplemented
+                     delete_record "$@"       ;;
     "modify"       ) shift
-                     modify_record "$@"       ;; # notimplemented
+                     modify_record "$@"       ;;
     "listrecords"  ) shift
                      list_records "$@"        ;;
     "getsoa"       ) shift
@@ -254,6 +254,9 @@ function list_records {
     print_error "listrecords expects at least one argument" && exit 1
   fi
   local ZONE="$1"
+  if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
+    print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
   shift
   if [ "$#" -gt "3" ]; then
     print_error "usage: ${THISPROG} listrecords <zone> [type=<type>] [host=<host>] [showid=<true|false>]"
@@ -334,15 +337,15 @@ function list_records {
     fi
     if [ "${HOST_RECORD}" = "@" ]; then
       if [ "${SHOW_ID}" = "true" ]; then
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else .  end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else .  end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else .  end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else .  end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
       else
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
       fi
     else
       if [ "${SHOW_ID}" = "true" ]; then
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
       else
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
+        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
       fi
     fi
   fi
@@ -372,6 +375,9 @@ function set_soa {
     exit 1
   fi
   local ZONE="$1"
+  if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
+    print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
   print_debug "Modifying SOA record for zone [${ZONE}]"
   shift
   local VALID_KEYS=( "primary-ns" "admin-mail" "refresh" "retry" "expire" "default-ttl" )
@@ -577,6 +583,9 @@ function add_record {
     exit 1
   fi
   local ZONE="$1"
+  if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
+    print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
   shift
   local -a VALID_KEYS=( "type" "host" "record" "ttl" "priority" "weight" "port" )
   local KV_PAIRS="$@" ERROR_COUNT=0
@@ -739,7 +748,7 @@ function add_record {
     print_error "Failed to add record: ${STATUS_DESC}" && exit 1
   elif [ "${STATUS}" = "Success" ]; then
     local ID=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.data.id' )
-    print_timestamp "Record succesfully added with id [${ID}]"
+    print_timestamp "Record successfully added with id [${ID}]"
   else
     print_error "Unexpected response while adding record" && exit 1
   fi 
@@ -831,6 +840,55 @@ function validate_rr_value {
 
 function delete_record {
   do_tests
+  if [ "$#" -ne "2" ]; then
+    print_error "usage: ${THISPROG} delrecord <zone> id=<id>"
+    exit 1
+  fi
+  local ZONE="$1"
+  if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
+    print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
+  shift
+  local ID_KV="$1"
+  local ID_K=$( ${ECHO} "${ID_KV}" | ${CUT} -d = -f 1 )
+  local ID_V=$( ${ECHO} "${ID_KV}" | ${CUT} -d = -f 2 )
+  if [ "${ID_K}" != "id" ]; then
+    print_error "id=<value> key-value pair not specified" && exit 1
+  fi
+  if ! [[ "${ID_V}" =~ ^[0-9]+$ ]]; then
+    print_error "id is not an integer" && exit 1
+  fi
+  local ID=${ID_V}
+  unset ID_K ID_V ID_KV
+  local RECORD_LIST=$( list_records ${ZONE} showid=true )
+  local TARGET_RECORD 
+  TARGET_RECORD=$( ${ECHO} "${RECORD_LIST}" | ${GREP} "^.*; id=${ID}$" )
+  if [ "$?" -ne "0" ]; then
+    print_error "No record found with id [${ID}] in zone [${ZONE}]"
+    exit 1
+  fi
+  unset RECORD_LIST
+  TARGET_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${SED} 's/; id=[0-9][0-9]*$//' | ${SED} -r 's/[[:space:]]$//' )
+  print_debug "Deleting record [${TARGET_RECORD}]"
+  (( ! FORCE )) && {
+    local USER_RESPONSE
+    ${ECHO} -n "Are you sure you want to delete record with id [${ID}]? [y|n]: "
+    read USER_RESPONSE
+    if [ "${USER_RESPONSE}" != "y" ]; then
+      print_error "Aborting at user request" && exit 1
+    fi
+  }
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE} -d record-id=${ID}"
+  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/delete-record.json" )
+  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
+  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "Failed to delete record: ${STATUS_DESC}" && exit 1
+  elif [ "${STATUS}" = "Success" ]; then
+    print_timestamp "Record successfully deleted"
+  else
+    print_error "Unexpected response while deleting record" && exit 1
+  fi
 }
 
 function modify_record {
@@ -840,6 +898,9 @@ function modify_record {
     exit 1
   fi
   local ZONE="$1"
+  if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
+    print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
   shift
   local -a VALID_KEYS=( "id" "host" "record" "ttl" "priority" "weight" "port" )
   local KV_PAIRS="$@" ERROR_COUNT=0
@@ -933,7 +994,6 @@ function modify_record {
   fi
   unset RECORD_LIST
   local GOT_TYPE=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $4 }' )
-  print_debug "We are modifying a record of type [${GOT_TYPE}]"
   # preload approriate variables depending on GOT_TYPE. All RRs will have
   # host, ttl, record. MX will have priority. SRV will have priority, weight
   # and port. SPF and TXT could have all kinds of nonsense in the record, but
@@ -945,16 +1005,125 @@ function modify_record {
     print_error "Trying to modify a record of type [${GOT_TYPE}] is not supported"
     exit 1
   fi
+  TARGET_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${SED} 's/; id=[0-9][0-9]*$//' | ${SED} -r 's/[[:space:]]$//' )
+  GOT_HOST=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $1 }' )
+  GOT_TTL=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $2 }' )
   case ${GOT_TYPE} in
-    "MX"  )
-            ;;
-    "SPF" )
-            ;;
-    "SRV" )
-            ;;
-    "TXT" ) 
-            ;;
+    "MX"        ) GOT_PRIORITY=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $5 }' )
+                  GOT_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $NF }' )
+                  print_debug "got RR data: HOST=[${GOT_HOST}] TTL=[${GOT_TTL}] TYPE=[${GOT_TYPE}] PRIORITY=[${GOT_PRIORITY}] RECORD=[${GOT_RECORD}]"
+                  ;;
+    "SPF"|"TXT" ) GOT_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${SED} 's/^.*"\([^"]*\)"$/\1/' )
+                  print_debug "got RR data: HOST=[${GOT_HOST}] TTL=[${GOT_TTL}] TYPE=[${GOT_TYPE}] RECORD=[${GOT_RECORD}]"
+                  ;;
+    "SRV"       ) GOT_PRIORITY=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $5 }' )
+                  GOT_WEIGHT=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $6 }' )
+                  GOT_PORT=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $7 }' )
+                  GOT_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $NF }' )
+                  print_debug "got RR data: HOST=[${GOT_HOST}] TTL=[${GOT_TTL}] TYPE=[${GOT_TYPE}] PRIORITY=[${GOT_PRIORITY}] WEIGHT=[${GOT_WEIGHT}] PORT=[${GOT_PORT}] RECORD=[${GOT_RECORD}]"
+                  ;;
+    *           ) GOT_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $NF }' )
+                  print_debug "got RR data: HOST=[${GOT_HOST}] TTL=[${GOT_TTL}] TYPE=[${GOT_TYPE}] RECORD=[${GOT_RECORD}]"
+                  ;;
   esac
+  # so, we now have our required variables set, pre-populated from the existing record.
+  # now, if we are modifying an SPF or TXT record's record field, load in the value from
+  # the specified file
+  case ${GOT_TYPE} in
+    "SPF"|"TXT" ) if [ ! -f "${RR_RECORD}" ]; then
+                    print_error "Unable to load record data from [${RR_RECORD}]" && exit 1
+                  else
+                    if [ "$( ${WC} -l ${RR_RECORD} | ${AWK} '{ print $1 }' )" -ne "1" ]; then
+                      print_error "Input file [${RR_RECORD}] has more than one line" && exit 1
+                    else
+                      RR_RECORD="$( ${CAT} ${RR_RECORD} )"
+                    fi
+                  fi
+                  ;;
+  esac
+  local CHANGED=0
+  [[ -n "${RR_HOST}" ]] && {
+    [[ "${RR_HOST}" != "${GOT_HOST}" ]] && {
+      GOT_HOST="${RR_HOST}"
+      (( CHANGED = CHANGED + 1 ))
+    }
+  }
+  [[ -n "${RR_TTL}" ]] && {
+    [[ "${RR_TTL}" != "${GOT_TTL}" ]] && {
+      GOT_TTL="${RR_TTL}"
+      (( CHANGED = CHANGED + 1 ))
+    }
+  }
+  [[ -n "${RR_RECORD}" ]] && {
+    [[ "${RR_RECORD}" != "${GOT_RECORD}" ]] && {
+      GOT_RECORD="${RR_RECORD}"
+      (( CHANGED = CHANGED + 1 ))
+    }
+  }
+  [[ -n "${RR_PRIORITY}" ]] && {
+    [[ "${RR_PRIORITY}" != "${GOT_PRIORITY}" ]] && {
+      GOT_PRIORITY="${RR_PRIORITY}"
+      (( CHANGED = CHANGED + 1 ))
+    }
+  }
+  [[ -n "${RR_WEIGHT}" ]] && {
+    [[ "${RR_WEIGHT}" != "${GOT_WEIGHT}" ]] && {
+      GOT_WEIGHT="${RR_WEIGHT}"
+      (( CHANGED = CHANGED + 1 ))
+    }
+  }
+  [[ -n "${RR_PORT}" ]] && {
+    [[ "${RR_PORT}" != "${GOT_PORT}" ]] && {
+      GOT_PORT="${RR_PORT}"
+      (( CHANGED = CHANGED + 1 ))
+    }
+  }
+  [[ "${CHANGED}" -eq "0" ]] && {
+    print_timestamp "Nothing has changed - no need to modify" && exit 0
+  }
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  POST_DATA="${POST_DATA} -d record-id=${RR_ID}"
+  POST_DATA="${POST_DATA} -d host=${GOT_HOST}"
+  POST_DATA="${POST_DATA} -d ttl=${GOT_TTL}"
+  if [ -n "${RR_PRIORITY}" ]; then
+    if [ "${GOT_TYPE}" != "MX" -a "${GOT_TYPE}" != "SRV" ]; then
+      print_error "priority specified for type other than MX or SRV"
+      exit 1
+    fi
+  fi
+  if [ -n "${RR_WEIGHT}" ]; then
+    if [ "${GOT_TYPE}" != "SRV" ]; then
+      print_error "weight specified for type other than SRV"
+      exit 1
+    fi
+  fi
+  if [ -n "${RR_PORT}" ]; then
+    if [ "${GOT_TYPE}" != "SRV" ]; then
+      print_error "port specified for type other than SRV"
+      exit 1
+    fi
+  fi
+  if [ "${GOT_TYPE}" = "MX" -o "${GOT_TYPE}" = "SRV" ]; then
+    POST_DATA="${POST_DATA} -d priority=${GOT_PRIORITY}"
+  fi
+  if [ "${GOT_TYPE}" = "SRV" ]; then
+    POST_DATA="${POST_DATA} -d weight=${GOT_WEIGHT} -d port=${GOT_PORT}"
+  fi
+  if [ "${GOT_TYPE}" = "TXT" -o "${GOT_TYPE}" = "SPF" ]; then
+    local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} --data-binary @<( ${ECHO} -ne "record=\"${GOT_RECORD}\"" ) "${API_URL}/mod-record.json" )
+  else
+    POST_DATA="${POST_DATA} -d record=${GOT_RECORD}"
+    local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/mod-record.json" )
+  fi
+  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
+  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "Failed to modify record: ${STATUS_DESC}" && exit 1
+  elif [ "${STATUS}" = "Success" ]; then
+    print_timestamp "Record successfully modified"
+  else
+    print_error "Unexpected response while modifying record" && exit 1
+  fi
 }
 
 function add_zone {
