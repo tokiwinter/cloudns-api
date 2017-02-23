@@ -76,4 +76,4 @@ I receive enough interest.
 - only supports forward zones
 - only supports creation/modification of SUPPORTED_RECORD_TYPES  
 
-    SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
+`SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )`
