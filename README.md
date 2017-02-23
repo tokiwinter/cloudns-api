@@ -83,6 +83,15 @@ Using the script
 ### General options ###
 
 The `-d` option will cause `cloudns_api.sh` to act verbosely and print debug messages as it goes.
+The `-s` option will cause `cloudns_api.sh` to skip testing authentication prior to each API call.
+
+### test ###
+
+You can execute an authentication test, to check that your environment is correctly configured, as
+follows:
+
+    $ cloudns_api.sh test
+    Thu Feb 23 20:33:11 AEDT 2017: Login test successful
 
 ### listzones ###
 
