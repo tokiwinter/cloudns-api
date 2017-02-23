@@ -211,49 +211,165 @@ View the zone update status per nameserver.
 
 #### Description ####
 
+Add a new resource record to a zone.
+
 #### Usage ####
 
+Options required depend upon the record type being added. The key=value pairs can appear
+in any order.
+
+For A, NS, CNAME, SPF, TXT:
+
+    $ cloudns_api.sh addrecord <zonename> type=<type> host=<host> record=<record> ttl=<ttl>
+
+SPF and TXT records are a special case. As their record data could include whitespace and
+other characters, you should create a single-line file containing the record data. See Examples
+below.
+
+For MX:
+
+    $ cloudns_api.sh addrecord <zonename> type=MX host=<host> record=<record> ttl=<ttl> priority=<priority>
+
+For SRV:
+
+    $ cloudns_api.sh addrecord <zonename> type=SRV host=<host> record=<record> ttl=<ttl> priority=<priority> weight=<weight> port=<port>
+
+If you want an apex record, specify `host=@`.
+
 #### Example ####
+
+For non-SPF/TXT records, here a CNAME (some limited validation of values occurs in the script,
+and then the API does its own validation):
+
+    $ cloudns_api.sh addrecord foo.com type=CNAME host=testing record=cnametarget.foo.com. ttl=60
+    Thu Feb 23 20:01:20 AEDT 2017: Record successfully added with id [24135067]
+
+For SPF/TXT records, add your record data to a file, on a single line, without enclosing quotes.
+Reference that in the `record=<filename>` key=value pair:
+
+    $ echo "This isn't text. Oh, it is actually" > /var/tmp/txt.txt
+    $ cloudns_api.sh addrecord foo.com type=TXT host=testtext record=/var/tmp/txt.txt ttl=60
+    Thu Feb 23 20:02:51 AEDT 2017: Record successfully added with id [24135071]
+    $ rm -f /var/tmp/txt.txt
 
 ### delrecord ###
 
 #### Description ####
 
+Delete a resource record from a zone by id. You will be asked to confirm the operation. You
+can avoid this, and force the removal, with `-f`. Obtain the record id using the `listrecords`
+command.
+
 #### Usage ####
 
+    $ cloudns_api.sh [-f] delrecord <zonename> id=<id>
+
 #### Example ####
+
+    $ cloudns_api.sh delrecord foo.com id=24135071
+    Are you sure you want to delete record with id [24135071]? [y|n]: y
+    Thu Feb 23 20:05:46 AEDT 2017: Record successfully deleted
 
 ### modify ###
 
 #### Description ####
 
+Modify an existing resource record. You must specify at least one attribute to modify. You
+must know the record id (use the `listrecords` command to obtain this). The key=value pairs
+are the same as with `addrecord`. You cannot modify a record's `type`, so don't try that.
+If you want to change `record` for an SPF or TXT record, the same loading-from-file
+mechanism as with `addrecord` applies to `modify` to.
+
+You can modify as many attributes as you want in a single invocation. If you specify the
+same attribute twice, the latest specification will be used. The order of attribute specification
+does not matter.
+
 #### Usage ####
 
+    $ cloudns_api.sh modify <zonename> id=<id> key=<value> [key=<value> ...]
+
 #### Example ####
+
+    $ cloudns_api.sh modify foo.com id=24135067 ttl=3600 record=newcnametarget.foo.com.
+    Thu Feb 23 20:11:24 AEDT 2017: Record successfully modified
+
+### listrecords ###
+
+#### Description ####
+
+List records for a specified zone in either BIND (RFC 1035) format or JSON. If you want
+apex records, specify `host=@`. IDs are now shown by default, specify `showid=true` to
+display them, as a BIND-style comment.
+
+#### Usage ####
+
+    $ cloudns_api.sh [-j] listrecords <zonename> [host=<host>] [type=<type>] [showid=<true|false>]
+
+#### Example ####
+
+    $ cloudns_api.sh listrecords foo.com host=@ type=NS showid=true
+    @  3600  IN  NS  ns1.cloudns.net.  ; id=24134077
+    @  3600  IN  NS  ns2.cloudns.net.  ; id=24134078
+    ...
 
 ### getsoa ###
 
 #### Description ####
 
+Display SOA record details for a specified zone.
+
 #### Usage ####
 
+    $ cloudns_api.sh getsoa <zonename>
+
 #### Example ####
+
+    $ cloudns_api.sh getsoa foo.com
+    serialNumber:2017022315
+    primaryNS:ns1.cloudns.net
+    adminMail:support@cloudns.net
+    refresh:7200
+    retry:1800
+    expire:1209600
+    defaultTTL:3600
 
 ### setsoa ###
 
 #### Description ####
 
+Modify the SOA record for a specified zone. You can modify one or more parameters in the same
+invocation. Order does not matter.
+
 #### Usage ####
 
+    $ cloudns_api.sh setsoa <zonename> key=value [key=<value> ...]
+
+Valid keys are: 
+
+    primary-ns admin-mail refresh retry expire default-ttl
+
 #### Example ####
+
+    $ cloudns_api.sh setsoa foo.com admin-mail=hostmaster@foo.com default-ttl=3600
+    Thu Feb 23 20:20:49 AEDT 2017: default-ttl value same as existing
+    Thu Feb 23 20:20:49 AEDT 2017: SOA for zone [foo.com] modifie
 
 ### helper ###
 
 #### Description ####
 
+Execute a helper function directly.
+
 #### Usage ####
 
+     $ cloudns_api.sh helper <function>
+
 #### Example ####
+
+    $ cloudns_api.sh helper get_available_ttls
+    60 300 900 1800 3600 21600 43200 86400 172800 259200 604800 1209600 2592000
+    $ cloudns_api.sh helper get_record_types
+    A AAAA MX CNAME TXT SPF NS SRV WR ALIAS RP SSHFP NAPTR
 
 Limitations
 -----------
