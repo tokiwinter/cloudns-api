@@ -308,7 +308,7 @@ does not matter.
 #### Description ####
 
 List records for a specified zone in either BIND (RFC 1035) format or JSON. If you want
-apex records, specify `host=@`. IDs are now shown by default, specify `showid=true` to
+apex records, specify `host=@`. IDs are not shown by default, specify `showid=true` to
 display them, as a BIND-style comment.
 
 #### Usage ####
