@@ -56,6 +56,7 @@ Usage
            getsoa     - get SOA record parameters for a zone
            setsoa     - set SOA record parameters for a zone
            helper     - call a helper function directly
+           test       - perform an authentication test
     
        Environment:
          Ensure that the following two environment variables are exported:
