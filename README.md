@@ -71,8 +71,8 @@ Limitations
 Current limitations. I may further develop the functionality offered by the script if
 I receive enough interest.
 
-# - does not support sub-auth-id
-# - only supports master zones
-# - only supports forward zones
-# - only supports creation/modification of SUPPORTED_RECORD_TYPES
-#   SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
+- does not support sub-auth-id
+- only supports master zones
+- only supports forward zones
+- only supports creation/modification of SUPPORTED_RECORD_TYPES
+  SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
