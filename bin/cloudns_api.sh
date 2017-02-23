@@ -73,7 +73,7 @@ function process_arguments {
     "nsstatus"     ) shift
                      ns_status "$@"           ;;
     "addrecord"    ) shift
-                     add_record "$@"          ;; # notimplemented 
+                     add_record "$@"          ;;
     "delrecord"    ) shift
                      delete_record "$@"       ;; # notimplemented
     "modify"       ) shift
@@ -737,7 +737,8 @@ function add_record {
   if [ "${STATUS}" = "Failed" ]; then
     print_error "Failed to add record: ${STATUS_DESC}" && exit 1
   elif [ "${STATUS}" = "Success" ]; then
-    print_timestamp "Record succesfully added"
+    local ID=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.data.id' )
+    print_timestamp "Record succesfully added with id [${ID}]"
   else
     print_error "Unexpected response while adding record" && exit 1
   fi 
