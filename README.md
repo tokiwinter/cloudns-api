@@ -4,6 +4,34 @@ cloudns-api
 This script has been developed to provide a simple-to-use command line interface
 to the JSON API provided by ClouDNS (http://cloudns.net).
 
+Installation
+------------
+
+    $ git clone https://github.com/tokiwinter/cloudns-api.git
+    $ sudo cp cloudns-api/bin/cloudns_api.sh /usr/local/bin
+    $ sudo chmod +x /usr/local/bin/cloudns_api.sh
+
+You should ensure that the paths to the various executables defined by the 
+script are available. You should also install `jq` if you don't have it
+already.
+
+Steps for OpenSUSE Leap 42, for example:
+
+Install `jq` if you don't already have it:
+
+    $ which jq 2>/dev/null || sudo zypper --non-interactive install jq
+
+Ensure all required binary paths are correct:
+
+    $ grep -E '^[A-Z]+="[^"]+"' /usr/local/bin/cloudns_api.sh |\
+    >   grep -Fv builtin |\
+    >   sed 's/^.*="\([^"][^"]*\)"$/\1/' |\
+    >   xargs ls -l
+
+If they are not, update them
+
+    $ sudo vi /usr/local/bin/cloudns_api.sh
+
 Usage
 -----
 
@@ -33,3 +61,6 @@ Usage
          Ensure that the following two environment variables are exported:
            CLOUDNS_API_ID   - your ClouDNS API ID (auth-id)
            CLOUDNS_PASSWORD - your ClouDNS API password (auth-password)
+
+Environment
+-----------
