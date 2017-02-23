@@ -362,7 +362,7 @@ Valid keys are:
 
     $ cloudns_api.sh setsoa foo.com admin-mail=hostmaster@foo.com default-ttl=3600
     Thu Feb 23 20:20:49 AEDT 2017: default-ttl value same as existing
-    Thu Feb 23 20:20:49 AEDT 2017: SOA for zone [foo.com] modifie
+    Thu Feb 23 20:20:49 AEDT 2017: SOA for zone [foo.com] modified
 
 ### helper ###
 
