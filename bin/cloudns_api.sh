@@ -41,7 +41,39 @@ function print_error {
 function print_usage {
   {
     ${ECHO} "Usage: ${THISPROG} [-dfhjs] command [options]"
+    ${ECHO} "       -d   run in debug mode (lots of verbose messages)"
+    ${ECHO} "       -f   force delrecord operations without confirmation"
+    ${ECHO} "       -h   display this help message"
+    ${ECHO} "       -j   return listrecords output in JSON format"
+    ${ECHO} "       -s   skip testing authentication prior to attempting API operations"
+    ${ECHO} ""
+    ${ECHO} "   Commands:"
+    ${ECHO} "       listzones  - list zones under management"
+    ${ECHO} "       addzone    - add a new zone"
+    ${ECHO} "       delzone    - delete an existing zone"
+    ${ECHO} "       checkzone  - check that a zone is managed"
+    ${ECHO} "       dumpzone   - dump a zone in BIND zonefile format"
+    ${ECHO} "       zonestatus - check whether a zone is updated on all NS"
+    ${ECHO} "       nsstatus   - view a breakdown of zone update status by NS"
+    ${ECHO} "       addrecord  - add a new DNS record to a zone"
+    ${ECHO} "       delrecord  - delete a DNS record from a zone"
+    ${ECHO} "       modify     - modify an existing DNS record"
+    ${ECHO} "       getsoa     - get SOA record parameters for a zone"
+    ${ECHO} "       setsoa     - set SOA record parameters for a zone"
+    ${ECHO} "       helper     - call a helper function directly"
+    ${ECHO} ""
+    ${ECHO} "   Environment:"
+    ${ECHO} "     Ensure that the following two environment variables are exported:"
+    ${ECHO} "       CLOUDNS_API_ID   - your ClouDNS API ID (auth-id)"
+    ${ECHO} "       CLOUDNS_PASSWORD - your ClouDNS API password (auth-password)"   
   } >&2
+}
+
+function check_jq {
+  [[ ! -x "${JQ}" ]] && {
+    print_error "This program requires jq to be installed. Install it."
+    exit 1
+  }
 }
 
 function print_timestamp {
@@ -1236,6 +1268,7 @@ if [ "$#" -eq "0" ]; then
   print_usage && exit 1
 fi
 
+check_jq
 check_environment_variables
 set_auth_post_data
 process_arguments "$@"
