@@ -61,6 +61,7 @@ function print_usage {
     ${ECHO} "       getsoa     - get SOA record parameters for a zone"
     ${ECHO} "       setsoa     - set SOA record parameters for a zone"
     ${ECHO} "       helper     - call a helper function directly"
+    ${ECHO} "       test       - perform an authentication test"
     ${ECHO} ""
     ${ECHO} "   Environment:"
     ${ECHO} "     Ensure that the following two environment variables are exported:"
