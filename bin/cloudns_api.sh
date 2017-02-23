@@ -19,6 +19,7 @@ WC="/usr/bin/wc"
 
 API_URL="https://api.cloudns.net/dns"
 DEBUG=0
+FORCE=0
 JSON=0
 REMOVAL_WAIT=5
 SKIP_TESTS=0
@@ -39,7 +40,7 @@ function print_error {
 
 function print_usage {
   {
-    ${ECHO} "Usage: ${THISPROG} [-ds] command [options]"
+    ${ECHO} "Usage: ${THISPROG} [-dfhjs] command [options]"
   } >&2
 }
 
@@ -265,7 +266,7 @@ function list_records {
     for KV_PAIR in ${KV_PAIRS}; do
       ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=[^=]+$'
       if [ "$?" -ne "0" ]; then
-        print_error "key-value pair [${KV_PAIR}] not incorrect format" && exit 1
+        print_error "key-value pair [${KV_PAIR}] not in correct format" && exit 1
       fi
       local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
       local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
@@ -379,7 +380,7 @@ function set_soa {
   for KV_PAIR in ${KV_PAIRS}; do
     ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=[^=]+$'
     if [ "$?" -ne "0" ]; then
-      print_error "key-value pair [${KV_PAIR}] not incorrect format" && exit 1
+      print_error "key-value pair [${KV_PAIR}] not in correct format" && exit 1
     fi
     local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
     local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
@@ -583,7 +584,7 @@ function add_record {
   for KV_PAIR in ${KV_PAIRS}; do
     ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=.+$'
     if [ "$?" -ne "0" ]; then
-      print_error "key-value pair [${KV_PAIR}] not incorrect format" && exit 1
+      print_error "key-value pair [${KV_PAIR}] not in correct format" && exit 1
     fi
     local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
     local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
@@ -834,6 +835,126 @@ function delete_record {
 
 function modify_record {
   do_tests
+  if [ "$#" -lt "3" ]; then
+    print_error "usage: ${THISPROG} modify <zone> id=<id> key=<value> [key=<value> ... key=<value>]"
+    exit 1
+  fi
+  local ZONE="$1"
+  shift
+  local -a VALID_KEYS=( "id" "host" "record" "ttl" "priority" "weight" "port" )
+  local KV_PAIRS="$@" ERROR_COUNT=0
+  local KV_PAIR
+  for KV_PAIR in ${KV_PAIRS}; do
+    ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=.+$'
+    if [ "$?" -ne "0" ]; then
+      print_error "key-value pair [${KV_PAIR}] not in correct format" && exit 1
+    fi
+    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
+    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    print_debug "Checking key-value pair: ${KEY}=${VALUE}"
+    if ! has_element VALID_KEYS "${KEY}"; then
+      print_error "${KEY} is not a valid key"
+      (( ERROR_COUNT = ERROR_COUNT + 1 ))
+    fi
+    unset KEY VALUE
+  done
+  unset KV_PAIR
+  [[ "${ERROR_COUNT}" -gt "0" ]] && exit 1
+  local RR_ID RR_HOST RR_RECORD RR_TTL RR_PRIORITY RR_WEIGHT RR_PORT
+  for KV_PAIR in ${KV_PAIRS}; do
+    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
+    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    case ${KEY} in
+      "id"       ) if check_integer "${VALUE}" 0 100000000; then
+                     RR_ID="${VALUE}"
+                   else
+                     print_error "id must be an integer value" && exit 1
+                   fi
+                   ;; 
+      "host"     ) if validate_rr_value host null "${VALUE}"; then
+                     RR_HOST="${VALUE}"
+                   else
+                     print_error "Incorrectly formatted host [${VALUE}]"
+                     exit 1
+                   fi
+                   ;;
+      "record"   ) # record validation happens at end of the for loop, as we
+                   # need RR_TYPE to be set, and params could be passed in any
+                   # order
+                   RR_RECORD="${VALUE}"
+                   ;;
+      "ttl"      ) if validate_rr_value ttl null "${VALUE}"; then
+                     RR_TTL="${VALUE}"
+                   else
+                     print_error "Invalid TTL [${VALUE}]"
+                     exit 1
+                   fi
+                   ;;
+      "priority" ) if validate_rr_value priority null "${VALUE}"; then
+                     RR_PRIORITY="${VALUE}"
+                   else
+                     print_error "Invalid priority [${VALUE}]"
+                     exit 1
+                   fi
+                   ;;
+      "weight"   ) if validate_rr_value weight null "${VALUE}"; then
+                     RR_WEIGHT="${VALUE}"
+                   else
+                     print_error "Invalid weight [${VALUE}]"
+                     exit 1
+                   fi
+                   ;;
+      "port"     ) if validate_rr_value port null "${VALUE}"; then
+                     RR_PORT="${VALUE}"
+                   else
+                     print_error "Invalid port [${VALUE}]"
+                     exit 1
+                   fi
+                   ;;
+      *          ) print_error "${KEY} is an unknown key" && exit 1
+                   ;;
+    esac
+  done
+  unset KV_PAIR
+  # at this point, we have a bunch of variables which may or may not have values
+  # depending upon the record type being modified, and the modifications being made
+  # we *do*, however, need RR_ID set, at least
+  if [ -z "${RR_ID}" ]; then print_error "id=<value> not passed" && exit 1; fi
+  # first, we need to try to get a record with this id, to pre-populate some 
+  # variables which we may overwrite with user supplied key=value pairs, if they
+  # are set. The ClouDNS API has no way of retrieving a record by id. So, we use
+  # list_records ${ZONE} showid=true and sift through the output.
+  local RECORD_LIST=$( list_records ${ZONE} showid=true )
+  local TARGET_RECORD 
+  TARGET_RECORD=$( ${ECHO} "${RECORD_LIST}" | ${GREP} "^.*; id=${RR_ID}$" )
+  if [ "$?" -ne "0" ]; then
+    print_error "No record found with id [${RR_ID}] in zone [${ZONE}]"
+    exit 1
+  fi
+  unset RECORD_LIST
+  local GOT_TYPE=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $4 }' )
+  print_debug "We are modifying a record of type [${GOT_TYPE}]"
+  # preload approriate variables depending on GOT_TYPE. All RRs will have
+  # host, ttl, record. MX will have priority. SRV will have priority, weight
+  # and port. SPF and TXT could have all kinds of nonsense in the record, but
+  # will be surrounded by double quotes. If we are modifying the record value
+  # for an SPF or TXT record, we will read the new value in from a file, as we
+  # do in add_record()
+  local GOT_HOST GOT_TTL GOT_RECORD GOT_PRIORITY GOT_WEIGHT GOT_PORT
+  if ! has_element SUPPORTED_RECORD_TYPES "${GOT_TYPE}"; then
+    print_error "Trying to modify a record of type [${GOT_TYPE}] is not supported"
+    exit 1
+  fi
+  case ${GOT_TYPE} in
+    "MX"  )
+            ;;
+    "SPF" )
+            ;;
+    "SRV" )
+            ;;
+    "TXT" ) 
+            ;;
+  esac
 }
 
 function add_zone {
@@ -929,9 +1050,10 @@ function test_login {
   fi
 }
 
-while ${GETOPTS} ":dhjs" OPTION; do
+while ${GETOPTS} ":dfhjs" OPTION; do
   case ${OPTION} in
     "d") DEBUG=1               ;;
+    "f") FORCE=1               ;;
     "h") print_usage && exit 0 ;;
     "j") JSON=1                ;;
     "s") SKIP_TESTS=1          ;;
