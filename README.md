@@ -75,4 +75,5 @@ I receive enough interest.
 - only supports master zones
 - only supports forward zones
 - only supports creation/modification of SUPPORTED_RECORD_TYPES
+
     SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
