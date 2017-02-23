@@ -72,10 +72,188 @@ existence is tested by the script.
     $ export CLOUDNS_PASSWORD=<your_auth-password>
 
 The script does not currently support sub-auth-id, etc. See Limitations at the end of
-this document.
+this document. This does allow us to operate globally on your account. Ensure you
+run this script from a trusted host, `unset` your envionment variables when done, 
+remove the assignments from your history (`history -d <offset>`), and have appropriate
+IP restrictions in place on your auth-id (configurable via the ClouDNS web UI).
 
 Using the script
 ----------------
+
+### General options ###
+
+The `-d` option will cause `cloudns_api.sh` to act verbosely and print debug messages as it goes.
+
+### listzones ###
+
+#### Description ####
+
+List the zones under your account, and their type.
+
+#### Usage #####
+
+    $ cloudns_api.sh listzones
+
+#### Example ####
+
+    $ cloudns_api.sh listzones
+    testzone1.com:master
+    testzone2.com:master
+
+### addzone ###
+
+#### Description ####
+
+Add a new zone to your account.
+
+#### Usage ####
+
+    $ cloudns_api.sh addzone <zonename>
+
+#### Example ####
+
+    $ cloudns_api.sh addzone foo.com
+    Thu Feb 23 19:43:12 AEDT 2017: New zone [foo.com] added
+
+### delzone ###
+
+Delete a zone from your account. `delzone` treats you like an idiot, as deleting an
+entire zone is a big deal. You cannot force this operation (with `-f`). You will be
+asked to enter a string, exactly, as well as wait for a 5 second timeout (to give
+you time to hit CTRL-C) prior to the zone being removed forever.
+
+#### Usage ####
+
+    $ cloudns_api.sh delzone <zonename>
+
+#### Example ####
+
+    $ cloudns_api.sh delzone foo.com
+    Are you sure you want to delete zone [foo.com]?
+    You must type I-AM-SURE, exactly: I-AM-SURE
+    Okay. Waiting 5s prior to removal. CTRL-C now if unsure!
+    Thu Feb 23 19:43:39 AEDT 2017: Zone [foo.com] deleted
+
+### checkzone ###
+
+#### Description ####
+
+Check whether domains are managed under this account.
+
+#### Usage ####
+
+    $ cloudns_api.sh checkzone <zone1> [<zone2> ... <zonen>]
+
+#### Example ####
+
+    $ cloudns_api.sh checkzone foo.com bar.com
+    foo.com:present
+    bar.com:absent
+
+### dumpzone ###
+
+#### Description ####
+
+Dump an entire zone in BIND (RFC 1035) format, ideal for redirecting to a file.
+
+#### Usage ####
+
+    $ cloudns_api.sh dumpzone <zonename>
+
+#### Example ####
+
+    $ cloudns_api.sh dumpzone foo.com
+    $TTL 3600
+    @           IN  SOA  ns1.cloudns.net. support.cloudns.net. 2017022309 7200 1800 1209600 3600
+    @     3600  IN  NS   ns1.cloudns.net.
+    ....
+
+### zonestatus ###
+
+#### Description ####
+
+Check whether a zone is updated on all nameservers.
+
+#### Usage ####
+
+    $ cloudns_api.sh zonestatus <zone1> [<zone2> ... <zonen>]
+
+#### Example ####
+
+    $ cloudns_api.sh zonestatus foo.com bar.com tokitest.com
+    foo.com:up-to-date
+    bar.com:not-valid
+    tokitest.com:out-of-date
+
+### nsstatus ###
+
+#### Description ####
+
+View the zone update status per nameserver.
+
+#### Usage ####
+
+    $ cloudns_api.sh nsstatus <zonename>
+
+#### Example ####
+
+    $ cloudns_api.sh nsstatus tokitest.com
+    ns1.cloudns.net:true
+    ns2.cloudns.net:false
+    ns3.cloudns.net:true
+    ns4.cloudns.net:true
+    pns1.cloudns.net:true
+    pns2.cloudns.net:true
+    pns3.cloudns.net:true
+    pns4.cloudns.net:true
+
+### addrecord ###
+
+#### Description ####
+
+#### Usage ####
+
+#### Example ####
+
+### delrecord ###
+
+#### Description ####
+
+#### Usage ####
+
+#### Example ####
+
+### modify ###
+
+#### Description ####
+
+#### Usage ####
+
+#### Example ####
+
+### getsoa ###
+
+#### Description ####
+
+#### Usage ####
+
+#### Example ####
+
+### setsoa ###
+
+#### Description ####
+
+#### Usage ####
+
+#### Example ####
+
+### helper ###
+
+#### Description ####
+
+#### Usage ####
+
+#### Example ####
 
 Limitations
 -----------
