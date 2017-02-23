@@ -1185,6 +1185,11 @@ function delete_zone {
     print_error "delzone expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
+  fi
   print_debug "Deleting zone [${ZONE}]"
   ${ECHO} "Are you sure you want to delete zone [${ZONE}]?"
   ${ECHO} -n "You must type I-AM-SURE, exactly: "
