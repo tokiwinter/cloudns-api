@@ -156,18 +156,18 @@ function do_login {
   case ${STATUS} in
     "Success" ) print_debug "Login successful"
                 return 0 ;;
-    *         ) print_debug "Login failed"
-                return 1 ;;
+    *         ) print_error "Login failed"
+                exit 1 ;;
   esac  
 }
 
 function do_tests {
-  (( ! SKIP_TESTS )) && {
+  if [ "${SKIP_TESTS}" -eq "0" ]; then
     test_api_url
     do_login
-  } || {
+  else
     print_debug "-s passed - skipping tests"
-  }
+  fi
 }
 
 function check_zone {
