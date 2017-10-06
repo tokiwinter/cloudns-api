@@ -21,7 +21,10 @@ Install `jq` if you don't already have it:
 
     $ which jq 2>/dev/null || sudo zypper --non-interactive install jq
 
-Ensure all required binary paths are correct:
+Ensure all required binary paths are correct. I will update the code to   
+rely on `PATH` at some point, but I also wanted this to work on Solaris (I know)   
+and use a mix of xpg4, gnu, standard binaries. PATH wasn't cutting it, neither    
+was Solaris ... :
 
     $ grep -E '^[A-Z]+="[^"]+"' /usr/local/bin/cloudns_api.sh |\
     >   grep -Fv builtin |\
