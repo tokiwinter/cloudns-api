@@ -11,29 +11,7 @@ Installation
     $ sudo cp cloudns-api/bin/cloudns_api.sh /usr/local/bin
     $ sudo chmod +x /usr/local/bin/cloudns_api.sh
 
-You should ensure that the paths to the various executables defined by the 
-script are available. You should also install `jq` if you don't have it
-already.
-
-Steps for OpenSUSE Leap 42, for example:
-
-Install `jq` if you don't already have it:
-
-    $ which jq 2>/dev/null || sudo zypper --non-interactive install jq
-
-Ensure all required binary paths are correct. I will update the code to   
-rely on `PATH` at some point, but I also wanted this to work on Solaris (I know)   
-and use a mix of xpg4, gnu, standard binaries. `PATH` wasn't cutting it, neither    
-was Solaris ... :
-
-    $ grep -E '^[A-Z]+="[^"]+"' /usr/local/bin/cloudns_api.sh |\
-    >   grep -Fv builtin |\
-    >   sed 's/^.*="\([^"][^"]*\)"$/\1/' |\
-    >   xargs ls -l
-
-If they are not, update them:
-
-    $ sudo vi /usr/local/bin/cloudns_api.sh
+You should also install `jq` if you don't have it already.
 
 Usage
 -----

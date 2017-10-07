@@ -17,11 +17,11 @@ SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
 # - only supports forward zones
 # - only supports creation/modification of SUPPORTED_RECORD_TYPES
 
-function print_error {
+function print_error() {
   builtin echo "$( date ): Error: $@" >&2
 }
 
-function print_usage {
+function print_usage() {
   {
     builtin echo "Usage: ${THISPROG} [-dfhjs] command [options]"
     builtin echo "       -d   run in debug mode (lots of verbose messages)"
@@ -54,7 +54,7 @@ function print_usage {
   } >&2
 }
 
-function check_jq {
+function check_jq() {
   
   if ! which jq >/dev/null 2>&1; then
     print_error "This program requires jq to be installed. Install it."
@@ -62,15 +62,15 @@ function check_jq {
   fi
 }
 
-function print_timestamp {
+function print_timestamp() {
   builtin echo "$( date ): $@"
 }
 
-function print_debug {
+function print_debug() {
   (( DEBUG )) && builtin echo "$( date ): DEBUG: $@"
 }
 
-function process_arguments {
+function process_arguments() {
   local COMMAND="$1"
   if [ -z "${COMMAND}" ]; then
     print_usage && exit 1
@@ -109,7 +109,7 @@ function process_arguments {
   esac
 }
 
-function check_environment_variables {
+function check_environment_variables() {
   local ERROR_COUNT=0
   local REQUIRED_VARIABLES=( CLOUDNS_API_ID CLOUDNS_PASSWORD )
   for REQUIRED_VARIABLE in ${REQUIRED_VARIABLES[@]}; do
@@ -123,11 +123,11 @@ function check_environment_variables {
   fi
 }
 
-function set_auth_post_data {
+function set_auth_post_data() {
   AUTH_POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
 }
 
-function test_api_url {
+function test_api_url() {
   local HTTP_CODE=$( curl -4qs -o /dev/null -w '%{http_code}' ${API_URL}/login.json )
   if [ "${HTTP_CODE}" != "200" ]; then
     print_error "Unable to reach ClouDNS API" && exit 1
@@ -136,7 +136,7 @@ function test_api_url {
   fi
 }
 
-function do_login {
+function do_login() {
   local STATUS=$( curl -4qs -X POST ${AUTH_POST_DATA} "${API_URL}/login.json" | jq -r '.status' )
   case ${STATUS} in
     "Success" ) print_debug "Login successful"
@@ -146,7 +146,7 @@ function do_login {
   esac  
 }
 
-function do_tests {
+function do_tests() {
   if [ "${SKIP_TESTS}" -eq "0" ]; then
     test_api_url
     do_login
@@ -155,7 +155,7 @@ function do_tests {
   fi
 }
 
-function check_zone {
+function check_zone() {
   do_tests
   local ZONES="$@"
   if [ -z "${ZONES}" ]; then
@@ -173,7 +173,7 @@ function check_zone {
   done
 }
 
-function ns_status {
+function ns_status() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "nsstatus expects exactly one argument" && exit 1
@@ -191,7 +191,7 @@ function ns_status {
   fi
 }
 
-function zone_status {
+function zone_status() {
   do_tests
   local ZONES="$@"
   if [ -z "${ZONES}" ]; then
@@ -213,7 +213,7 @@ function zone_status {
 
 # we don't need to call do_tests in the get_* helper functions, as it
 # will have already been called in the calling function
-function get_page_count {
+function get_page_count() {
   local POST_DATA="${AUTH_POST_DATA} -d rows-per-page=${ROWS_PER_PAGE}"
   local PAGE_COUNT=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/get-pages-count.json" )
   local STATUS=$( builtin echo "${PAGE_COUNT}" | jq -r '.status' 2>/dev/null )
@@ -227,7 +227,7 @@ function get_page_count {
   builtin echo "${PAGE_COUNT}"
 }
 
-function get_record_types {
+function get_record_types() {
   local POST_DATA="${AUTH_POST_DATA} -d zone-type=domain"
   local RECORD_TYPES=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/get-available-record-types.json" )
   local STATUS=$( builtin echo "${RECORD_TYPES}" | jq -r '.status' 2>/dev/null )
@@ -244,7 +244,7 @@ function get_record_types {
   builtin echo "${RECORD_TYPES}"
 }
 
-function get_available_ttls {
+function get_available_ttls() {
   local POST_DATA="${AUTH_POST_DATA}"
   local TTLS=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/get-available-ttl.json" )
   local STATUS=$( builtin echo "${TTLS}" | jq -r '.status' 2>/dev/null )
@@ -255,7 +255,7 @@ function get_available_ttls {
   builtin echo "${TTLS}"
 }
 
-function has_element {
+function has_element() {
   local -n CHECK_ARRAY="$1"
   local CHECK_VALUE="$2"
   local VALUE
@@ -267,7 +267,7 @@ function has_element {
   return 1
 }
 
-function list_records {
+function list_records() {
   do_tests
   if [ "$#" -eq "0" ]; then
     print_error "listrecords expects at least one argument" && exit 1
@@ -371,7 +371,7 @@ function list_records {
   fi
 }
 
-function get_soa {
+function get_soa() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "getsoa expects exactly one argument" && exit 1
@@ -389,7 +389,7 @@ function get_soa {
   builtin echo "${SOA_DATA}" | jq -r 'to_entries[] | .key + ":" + .value'
 }
 
-function set_soa {
+function set_soa() {
   do_tests
   if [ "$#" -lt "2" ]; then
     print_error "usage: ${THISPROG} setsoa <domain> key=<value> [key=<value> ...  key=<value>]"
@@ -546,7 +546,7 @@ function set_soa {
   fi
 }
 
-function check_integer {
+function check_integer() {
   local VALUE="$1"
   local LOWER="$2"
   local UPPER="$3"
@@ -558,7 +558,7 @@ function check_integer {
   fi
 }
 
-function validate_soa_value {
+function validate_soa_value() {
   # see https://www.cloudns.net/wiki/article/63/ for permissible integer values
   local TYPE="$1"
   local VALUE="$2"
@@ -581,7 +581,7 @@ function validate_soa_value {
   esac
 }
 
-function dump_zone {
+function dump_zone() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "dumpzone expects exactly one argument" && exit 1
@@ -599,7 +599,7 @@ function dump_zone {
   fi
 }
 
-function add_record {
+function add_record() {
   do_tests
   if [ "$#" -lt "5" ]; then
     print_error "usage: ${THISPROG} addrecord <zone> type=<type> host=<host> record=<record> ttl=<ttl> [key=<value> ... key=<value>]"
@@ -778,7 +778,7 @@ function add_record {
   fi 
 }
 
-function check_ipv4_address {
+function check_ipv4_address() {
   local IP="$1"
   local NUM_PARTS=$( builtin echo "${IP}" | awk -F . '{ print NF }' )
   if [ "${NUM_PARTS}" -ne "4" ]; then
@@ -794,7 +794,7 @@ function check_ipv4_address {
   return 0
 }
 
-function validate_rr_value {
+function validate_rr_value() {
   local CHECK_TYPE="$1"
   local RECORD_TYPE="$2"
   shift 2
@@ -862,7 +862,7 @@ function validate_rr_value {
   esac
 }
 
-function delete_record {
+function delete_record() {
   do_tests
   if [ "$#" -ne "2" ]; then
     print_error "usage: ${THISPROG} delrecord <zone> id=<id>"
@@ -916,7 +916,7 @@ function delete_record {
   fi
 }
 
-function modify_record {
+function modify_record() {
   do_tests
   if [ "$#" -lt "3" ]; then
     print_error "usage: ${THISPROG} modify <zone> id=<id> key=<value> [key=<value> ... key=<value>]"
@@ -1164,7 +1164,7 @@ function modify_record {
   fi
 }
 
-function add_zone {
+function add_zone() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "addzone expects exactly one argument" && exit 1
@@ -1185,7 +1185,7 @@ function add_zone {
   fi
 }
 
-function delete_zone {
+function delete_zone() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "delzone expects exactly one argument" && exit 1
@@ -1215,7 +1215,7 @@ function delete_zone {
   fi
 }
 
-function list_zones {
+function list_zones() {
   do_tests
   local PAGE_COUNT=$( get_page_count )
   local COUNTER=0
@@ -1230,7 +1230,7 @@ function list_zones {
   done
 }
 
-function call_helper {
+function call_helper() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "helper expects exactly one argument" && exit 1
@@ -1246,7 +1246,7 @@ function call_helper {
   esac
 }
 
-function test_login {
+function test_login() {
   # don't check SKIP_TESTS here as this is the "test" command
   test_api_url
   do_login
@@ -1258,7 +1258,7 @@ function test_login {
   fi
 }
 
-function check_zone_managed {
+function check_zone_managed() {
   local ZONE=$1
   local LISTED_ZONES
   LISTED_ZONES=$( list_zones | grep -qs "^${ZONE}:" )
