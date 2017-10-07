@@ -1,29 +1,12 @@
 #!/bin/bash
 
-AWK="/usr/bin/awk"
-BASENAME="/usr/bin/basename"
-CAT="/usr/bin/cat"
-CURL="/usr/bin/curl"
-CUT="/usr/bin/cut"
-DATE="/usr/bin/date"
-ECHO="builtin echo"
-EVAL="builtin eval"
-GETOPTS="builtin getopts"
-GREP="/usr/bin/grep"
-JQ="/usr/bin/jq"
-SED="/usr/bin/sed"
-SLEEP="/usr/bin/sleep"
-TEST="/usr/bin/test"
-TR="/usr/bin/tr"
-WC="/usr/bin/wc"
-
 API_URL="https://api.cloudns.net/dns"
 DEBUG=0
 FORCE=0
 JSON=0
 REMOVAL_WAIT=5
 SKIP_TESTS=0
-THISPROG=$( ${BASENAME} $0 )
+THISPROG=$( basename $0 )
 
 ROWS_PER_PAGE=100
 SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
@@ -34,58 +17,60 @@ SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
 # - only supports forward zones
 # - only supports creation/modification of SUPPORTED_RECORD_TYPES
 
-function print_error {
-  ${ECHO} "$( ${DATE} ): Error: $@" >&2
+function print_error() {
+  builtin echo "$( date ): Error: $@" >&2
 }
 
-function print_usage {
+function print_usage() {
   {
-    ${ECHO} "Usage: ${THISPROG} [-dfhjs] command [options]"
-    ${ECHO} "       -d   run in debug mode (lots of verbose messages)"
-    ${ECHO} "       -f   force delrecord operations without confirmation"
-    ${ECHO} "       -h   display this help message"
-    ${ECHO} "       -j   return listrecords output in JSON format"
-    ${ECHO} "       -s   skip testing authentication prior to attempting API operations"
-    ${ECHO} ""
-    ${ECHO} "   Commands:"
-    ${ECHO} "       listzones  - list zones under management"
-    ${ECHO} "       addzone    - add a new zone"
-    ${ECHO} "       delzone    - delete an existing zone"
-    ${ECHO} "       checkzone  - check that a zone is managed"
-    ${ECHO} "       dumpzone   - dump a zone in BIND zonefile format"
-    ${ECHO} "       zonestatus - check whether a zone is updated on all NS"
-    ${ECHO} "       nsstatus   - view a breakdown of zone update status by NS"
-    ${ECHO} "       addrecord  - add a new DNS record to a zone"
-    ${ECHO} "       delrecord  - delete a DNS record from a zone"
-    ${ECHO} "       modify     - modify an existing DNS record"
-    ${ECHO} "       getsoa     - get SOA record parameters for a zone"
-    ${ECHO} "       setsoa     - set SOA record parameters for a zone"
-    ${ECHO} "       helper     - call a helper function directly"
-    ${ECHO} "       test       - perform an authentication test"
-    ${ECHO} ""
-    ${ECHO} "   Environment:"
-    ${ECHO} "     Ensure that the following two environment variables are exported:"
-    ${ECHO} "       CLOUDNS_API_ID   - your ClouDNS API ID (auth-id)"
-    ${ECHO} "       CLOUDNS_PASSWORD - your ClouDNS API password (auth-password)"   
+    builtin echo "Usage: ${THISPROG} [-dfhjs] command [options]"
+    builtin echo "       -d   run in debug mode (lots of verbose messages)"
+    builtin echo "       -f   force delrecord operations without confirmation"
+    builtin echo "       -h   display this help message"
+    builtin echo "       -j   return listrecords output in JSON format"
+    builtin echo "       -s   skip testing authentication prior to attempting API operations"
+    builtin echo ""
+    builtin echo "   Commands:"
+    builtin echo "       listzones    - list zones under management"
+    builtin echo "       addzone      - add a new zone"
+    builtin echo "       delzone      - delete an existing zone"
+    builtin echo "       checkzone    - check that a zone is managed"
+    builtin echo "       dumpzone     - dump a zone in BIND zonefile format"
+    builtin echo "       zonestatus   - check whether a zone is updated on all NS"
+    builtin echo "       nsstatus     - view a breakdown of zone update status by NS"
+    builtin echo "       addrecord    - add a new DNS record to a zone"
+    builtin echo "       delrecord    - delete a DNS record from a zone"
+    builtin echo "       listrecords  - list records in a zone"
+    builtin echo "       modify       - modify an existing DNS record"
+    builtin echo "       getsoa       - get SOA record parameters for a zone"
+    builtin echo "       setsoa       - set SOA record parameters for a zone"
+    builtin echo "       helper     - call a helper function directly"
+    builtin echo "       test       - perform an authentication test"
+    builtin echo ""
+    builtin echo "   Environment:"
+    builtin echo "     Ensure that the following two environment variables are exported:"
+    builtin echo "       CLOUDNS_API_ID   - your ClouDNS API ID (auth-id)"
+    builtin echo "       CLOUDNS_PASSWORD - your ClouDNS API password (auth-password)"   
   } >&2
 }
 
-function check_jq {
-  [[ ! -x "${JQ}" ]] && {
+function check_jq() {
+  
+  if ! which jq >/dev/null 2>&1; then
     print_error "This program requires jq to be installed. Install it."
     exit 1
-  }
+  fi
 }
 
-function print_timestamp {
-  ${ECHO} "$( ${DATE} ): $@"
+function print_timestamp() {
+  builtin echo "$( date ): $@"
 }
 
-function print_debug {
-  (( DEBUG )) && ${ECHO} "$( ${DATE} ): DEBUG: $@"
+function print_debug() {
+  (( DEBUG )) && builtin echo "$( date ): DEBUG: $@"
 }
 
-function process_arguments {
+function process_arguments() {
   local COMMAND="$1"
   if [ -z "${COMMAND}" ]; then
     print_usage && exit 1
@@ -124,11 +109,11 @@ function process_arguments {
   esac
 }
 
-function check_environment_variables {
+function check_environment_variables() {
   local ERROR_COUNT=0
   local REQUIRED_VARIABLES=( CLOUDNS_API_ID CLOUDNS_PASSWORD )
   for REQUIRED_VARIABLE in ${REQUIRED_VARIABLES[@]}; do
-    if $( ${EVAL} ${TEST} -z \${${REQUIRED_VARIABLE}} ); then
+    if $( builtin eval test -z \${${REQUIRED_VARIABLE}} ); then
       print_error "Environment variable \${${REQUIRED_VARIABLE}} unset"
       (( ERROR_COUNT = ERROR_COUNT + 1 ))
     fi
@@ -138,12 +123,12 @@ function check_environment_variables {
   fi
 }
 
-function set_auth_post_data {
+function set_auth_post_data() {
   AUTH_POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
 }
 
-function test_api_url {
-  local HTTP_CODE=$( ${CURL} -4qs -o /dev/null -w '%{http_code}' ${API_URL}/login.json )
+function test_api_url() {
+  local HTTP_CODE=$( curl -4qs -o /dev/null -w '%{http_code}' ${API_URL}/login.json )
   if [ "${HTTP_CODE}" != "200" ]; then
     print_error "Unable to reach ClouDNS API" && exit 1
   else
@@ -151,8 +136,8 @@ function test_api_url {
   fi
 }
 
-function do_login {
-  local STATUS=$( ${CURL} -4qs -X POST ${AUTH_POST_DATA} "${API_URL}/login.json" | ${JQ} -r '.status' )
+function do_login() {
+  local STATUS=$( curl -4qs -X POST ${AUTH_POST_DATA} "${API_URL}/login.json" | jq -r '.status' )
   case ${STATUS} in
     "Success" ) print_debug "Login successful"
                 return 0 ;;
@@ -161,7 +146,7 @@ function do_login {
   esac  
 }
 
-function do_tests {
+function do_tests() {
   if [ "${SKIP_TESTS}" -eq "0" ]; then
     test_api_url
     do_login
@@ -170,7 +155,7 @@ function do_tests {
   fi
 }
 
-function check_zone {
+function check_zone() {
   do_tests
   local ZONES="$@"
   if [ -z "${ZONES}" ]; then
@@ -179,34 +164,34 @@ function check_zone {
   for ZONE in ${ZONES}; do
     print_debug "Checking zone [${ZONE}]"
     local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
-    local OUTPUT=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-zone-info.json" )
-    if [ $( ${ECHO} "${OUTPUT}" | ${JQ} -r '.status' ) != "Failed" ]; then
-      ${ECHO} "${ZONE}:present"
+    local OUTPUT=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/get-zone-info.json" )
+    if [ $( builtin echo "${OUTPUT}" | jq -r '.status' ) != "Failed" ]; then
+      builtin echo "${ZONE}:present"
     else
-      ${ECHO} "${ZONE}:absent"
+      builtin echo "${ZONE}:absent"
     fi
   done
 }
 
-function ns_status {
+function ns_status() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "nsstatus expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   print_debug "Checking NS status for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
-  local NS_STATUS=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/update-status.json" )
-  local STATUS=$( ${ECHO} "${NS_STATUS}" | ${JQ} -r '.status' 2>/dev/null )
+  local NS_STATUS=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/update-status.json" )
+  local STATUS=$( builtin echo "${NS_STATUS}" | jq -r '.status' 2>/dev/null )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "No such domain [${ZONE}]" && exit 1
   else
-    ${ECHO} "${NS_STATUS}" | ${JQ} -r '.[] | .server + ":" + (.updated|tostring)'
+    builtin echo "${NS_STATUS}" | jq -r '.[] | .server + ":" + (.updated|tostring)'
   fi
 }
 
-function zone_status {
+function zone_status() {
   do_tests
   local ZONES="$@"
   if [ -z "${ZONES}" ]; then
@@ -215,62 +200,62 @@ function zone_status {
   for ZONE in ${ZONES}; do
     print_debug "Checking zone status for [${ZONE}]"
     local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
-    local IS_UPDATED=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/is-updated.json" )
+    local IS_UPDATED=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/is-updated.json" )
     if [ "${IS_UPDATED}" = "true" ]; then
-      ${ECHO} "${ZONE}:up-to-date"
+      builtin echo "${ZONE}:up-to-date"
     elif [ "${IS_UPDATED}" = "false" ]; then
-      ${ECHO} "${ZONE}:out-of-date"
+      builtin echo "${ZONE}:out-of-date"
     else
-      ${ECHO} "${ZONE}:not-valid"
+      builtin echo "${ZONE}:not-valid"
     fi
   done
 }
 
 # we don't need to call do_tests in the get_* helper functions, as it
 # will have already been called in the calling function
-function get_page_count {
+function get_page_count() {
   local POST_DATA="${AUTH_POST_DATA} -d rows-per-page=${ROWS_PER_PAGE}"
-  local PAGE_COUNT=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-pages-count.json" )
-  local STATUS=$( ${ECHO} "${PAGE_COUNT}" | ${JQ} -r '.status' 2>/dev/null )
+  local PAGE_COUNT=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/get-pages-count.json" )
+  local STATUS=$( builtin echo "${PAGE_COUNT}" | jq -r '.status' 2>/dev/null )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "API call to get-pages-count.json failed" && exit 1
   fi
-  ${ECHO} "${PAGE_COUNT}" | ${GREP} -Eqs '^[[:digit:]]+'
+  builtin echo "${PAGE_COUNT}" | grep -Eqs '^[[:digit:]]+'
   if [ "$?" -ne "0" ]; then
     print_error "Invalid response received from get-pages-count.json" && exit 1
   fi
-  ${ECHO} "${PAGE_COUNT}"
+  builtin echo "${PAGE_COUNT}"
 }
 
-function get_record_types {
+function get_record_types() {
   local POST_DATA="${AUTH_POST_DATA} -d zone-type=domain"
-  local RECORD_TYPES=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-available-record-types.json" )
-  local STATUS=$( ${ECHO} "${RECORD_TYPES}" | ${JQ} -r '.status' 2>/dev/null )
+  local RECORD_TYPES=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/get-available-record-types.json" )
+  local STATUS=$( builtin echo "${RECORD_TYPES}" | jq -r '.status' 2>/dev/null )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "API call to get-available-record-types.json failed" && exit 1
   fi
   # check for the existence of a common record type, e.g. CNAME
-  local INDEX=$( ${ECHO} "${RECORD_TYPES}" | ${JQ} -r 'index("CNAME")' )
+  local INDEX=$( builtin echo "${RECORD_TYPES}" | jq -r 'index("CNAME")' )
   if [ "${INDEX}" = "null" ]; then
     print_error "RECORD_TYPES array does not contain an expected record type"
     exit 1
   fi
-  RECORD_TYPES=$( ${ECHO} "${RECORD_TYPES}" | ${JQ} -r '.|join(" ")' )
-  ${ECHO} "${RECORD_TYPES}"
+  RECORD_TYPES=$( builtin echo "${RECORD_TYPES}" | jq -r '.|join(" ")' )
+  builtin echo "${RECORD_TYPES}"
 }
 
-function get_available_ttls {
+function get_available_ttls() {
   local POST_DATA="${AUTH_POST_DATA}"
-  local TTLS=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/get-available-ttl.json" )
-  local STATUS=$( ${ECHO} "${TTLS}" | ${JQ} -r '.status' 2>/dev/null )
+  local TTLS=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/get-available-ttl.json" )
+  local STATUS=$( builtin echo "${TTLS}" | jq -r '.status' 2>/dev/null )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "API call to get-available-ttl.json failed" && exit 1
   fi
-  TTLS=$( ${ECHO} "${TTLS}" | ${JQ} -r '[.[]|tostring]|join(" ")' )
-  ${ECHO} "${TTLS}"
+  TTLS=$( builtin echo "${TTLS}" | jq -r '[.[]|tostring]|join(" ")' )
+  builtin echo "${TTLS}"
 }
 
-function has_element {
+function has_element() {
   local -n CHECK_ARRAY="$1"
   local CHECK_VALUE="$2"
   local VALUE
@@ -282,7 +267,7 @@ function has_element {
   return 1
 }
 
-function list_records {
+function list_records() {
   do_tests
   if [ "$#" -eq "0" ]; then
     print_error "listrecords expects at least one argument" && exit 1
@@ -291,7 +276,7 @@ function list_records {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   shift
   if [ "$#" -gt "3" ]; then
     print_error "usage: ${THISPROG} listrecords <zone> [type=<type>] [host=<host>] [showid=<true|false>]"
@@ -302,12 +287,12 @@ function list_records {
     local KV_PAIRS="$@" ERROR_COUNT=0 SHOW_ID="false"
     local KV_PAIR
     for KV_PAIR in ${KV_PAIRS}; do
-      ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=[^=]+$'
+      builtin echo "${KV_PAIR}" | grep -Eqs '^[a-z-]+=[^=]+$'
       if [ "$?" -ne "0" ]; then
         print_error "key-value pair [${KV_PAIR}] not in correct format" && exit 1
       fi
-      local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
-      local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+      local KEY=$( builtin echo "${KV_PAIR}" | cut -d = -f 1 )
+      local VALUE=$( builtin echo "${KV_PAIR}" | cut -d = -f 2 )
       print_debug "Checking key-value pair: ${KEY}=${VALUE}"
       if ! has_element VALID_KEYS "${KEY}"; then
         print_error "${KEY} is not a valid key"
@@ -346,14 +331,14 @@ function list_records {
     POST_DATA="${POST_DATA} -d host=${HOST_RECORD}"
   fi
   print_debug "Fetching records for zone [${ZONE}] with type [${RECORD_TYPE:-not set}] and host [${HOST_RECORD:-not set}]"
-  local RECORD_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/records.json" )
-  local RESULT_LENGTH=$( ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.|length' )
+  local RECORD_DATA=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/records.json" )
+  local RESULT_LENGTH=$( builtin echo "${RECORD_DATA}" | jq -r '.|length' )
   if [ "${RESULT_LENGTH}" -eq "0" ]; then
     print_error "No matching records found" && exit 1
   else
-    local STATUS=$( ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.status' 2>/dev/null )
+    local STATUS=$( builtin echo "${RECORD_DATA}" | jq -r '.status' 2>/dev/null )
     if [ "${STATUS}" = "Failed" ]; then
-      local STATUS_DESC=$( ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.statusDescription' )
+      local STATUS_DESC=$( builtin echo "${RECORD_DATA}" | jq -r '.statusDescription' )
       print_error "Unable to get records for [${ZONE}]: ${STATUS_DESC}" && exit 1
     fi
     # output records in BIND format - if showid is true, then add the id as a BIND
@@ -364,47 +349,47 @@ function list_records {
     # upon that
     if [ "${JSON}" -eq "1" ]; then
       if [ "${HOST_RECORD}" = "@" ]; then
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.[] | select(.host == "")'
+        builtin echo "${RECORD_DATA}" | jq -r '.[] | select(.host == "")'
       else
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r '.'
+        builtin echo "${RECORD_DATA}" | jq -r '.'
       fi
       exit 0
     fi
     if [ "${HOST_RECORD}" = "@" ]; then
       if [ "${SHOW_ID}" = "true" ]; then
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else .  end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else .  end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
+        builtin echo "${RECORD_DATA}" | jq -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else .  end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else .  end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
       else
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
+        builtin echo "${RECORD_DATA}" | jq -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | select(.host == "@") | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
       fi
     else
       if [ "${SHOW_ID}" = "true" ]; then
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
+        builtin echo "${RECORD_DATA}" | jq -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record + "\t; id=" + .id) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record + "\t; id=" + .id) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record + "\t; id=" + .id) end'
       else
-        ${ECHO} "${RECORD_DATA}" | ${JQ} -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
+        builtin echo "${RECORD_DATA}" | jq -r 'map(if .host == "" then . + {"host":"@"} else . end) | map(if .type == "NS" or .type == "MX" or .type == "CNAME" or .type == "SRV" then . + {"record": (.record + ".")} else . end) | map(if .type == "TXT" or .type == "SPF" then . + {"record": ("\"" + .record + "\"")} else . end) | .[] | if .type == "MX" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + .record) elif .type == "SRV" then (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + (.priority|tostring) + "\t" + (.weight|tostring) + "\t" + (.port|tostring) + "\t" + .record) else (.host + "\t" + .ttl + "\tIN\t" + .type + "\t" + .record) end'
       fi
     fi
   fi
 }
 
-function get_soa {
+function get_soa() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "getsoa expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   print_debug "Retrieving SOA details for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
-  local SOA_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/soa-details.json" )
-  local STATUS=$( ${ECHO} "${SOA_DATA}" | ${JQ} -r '.status' 2>/dev/null )
+  local SOA_DATA=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/soa-details.json" )
+  local STATUS=$( builtin echo "${SOA_DATA}" | jq -r '.status' 2>/dev/null )
   if [ "${STATUS}" = "Failed" ]; then
-    local STATUS_DESC=$( ${ECHO} "${SOA_DATA}" | ${JQ} -r '.statusDescription' )
+    local STATUS_DESC=$( builtin echo "${SOA_DATA}" | jq -r '.statusDescription' )
     print_error "Unable to get SOA for [${ZONE}]: ${STATUS_DESC}" && exit 1
   fi
-  ${ECHO} "${SOA_DATA}" | ${JQ} -r 'to_entries[] | .key + ":" + .value'
+  builtin echo "${SOA_DATA}" | jq -r 'to_entries[] | .key + ":" + .value'
 }
 
-function set_soa {
+function set_soa() {
   do_tests
   if [ "$#" -lt "2" ]; then
     print_error "usage: ${THISPROG} setsoa <domain> key=<value> [key=<value> ...  key=<value>]"
@@ -414,19 +399,19 @@ function set_soa {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   print_debug "Modifying SOA record for zone [${ZONE}]"
   shift
   local -a VALID_KEYS=( "primary-ns" "admin-mail" "refresh" "retry" "expire" "default-ttl" )
   local KV_PAIRS="$@" ERROR_COUNT=0
   local KV_PAIR
   for KV_PAIR in ${KV_PAIRS}; do
-    ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=[^=]+$'
+    builtin echo "${KV_PAIR}" | grep -Eqs '^[a-z-]+=[^=]+$'
     if [ "$?" -ne "0" ]; then
       print_error "key-value pair [${KV_PAIR}] not in correct format" && exit 1
     fi
-    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
-    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    local KEY=$( builtin echo "${KV_PAIR}" | cut -d = -f 1 )
+    local VALUE=$( builtin echo "${KV_PAIR}" | cut -d = -f 2 )
     print_debug "Checking key-value pair: ${KEY}=${VALUE}"
     if ! has_element VALID_KEYS "${KEY}"; then
       print_error "${KEY} is not a valid key"
@@ -439,12 +424,12 @@ function set_soa {
   # modify-soa.json expects ALL parameters to be set. We will pre-populate via
   # a call to get_soa()
   local SOA_DATA=$( get_soa "${ZONE}" )
-  local PRIMARY_NS=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "primaryNS" { print $2 }' )
-  local ADMIN_MAIL=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "adminMail" { print $2 }' )
-  local REFRESH=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "refresh" { print $2 }' )
-  local RETRY=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "retry" { print $2 }' )
-  local EXPIRE=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "expire" { print $2 }' )
-  local DEFAULT_TTL=$( ${ECHO} "${SOA_DATA}" | ${AWK} -F : '$1 == "defaultTTL" { print $2 }' )
+  local PRIMARY_NS=$( builtin echo "${SOA_DATA}" | awk -F : '$1 == "primaryNS" { print $2 }' )
+  local ADMIN_MAIL=$( builtin echo "${SOA_DATA}" | awk -F : '$1 == "adminMail" { print $2 }' )
+  local REFRESH=$( builtin echo "${SOA_DATA}" | awk -F : '$1 == "refresh" { print $2 }' )
+  local RETRY=$( builtin echo "${SOA_DATA}" | awk -F : '$1 == "retry" { print $2 }' )
+  local EXPIRE=$( builtin echo "${SOA_DATA}" | awk -F : '$1 == "expire" { print $2 }' )
+  local DEFAULT_TTL=$( builtin echo "${SOA_DATA}" | awk -F : '$1 == "defaultTTL" { print $2 }' )
   print_debug "Initial SOA paramters loaded via get_soa():"
   print_debug "--> PRIMARY_NS: ${PRIMARY_NS}"
   print_debug "--> ADMIN_MAIL: ${ADMIN_MAIL}"
@@ -454,8 +439,8 @@ function set_soa {
   print_debug "--> DEFAULT_TTL: ${DEFAULT_TTL}"
   local CHANGED=0
   for KV_PAIR in ${KV_PAIRS}; do
-    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
-    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    local KEY=$( builtin echo "${KV_PAIR}" | cut -d = -f 1 )
+    local VALUE=$( builtin echo "${KV_PAIR}" | cut -d = -f 2 )
     # no default required in case as we've already checked against VALID_KEYS
     case ${KEY} in
       "primary-ns"  ) validate_soa_value ns "${VALUE}"
@@ -549,9 +534,9 @@ function set_soa {
   POST_DATA="${POST_DATA} -d retry=${RETRY}"
   POST_DATA="${POST_DATA} -d expire=${EXPIRE}"
   POST_DATA="${POST_DATA} -d default-ttl=${DEFAULT_TTL}"
-  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/modify-soa.json" )
-  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
-  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  local RESPONSE=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/modify-soa.json" )
+  local STATUS=$( builtin echo "${RESPONSE}" | jq -r '.status' )
+  local STATUS_DESC=$( builtin echo "${RESPONSE}" | jq -r '.statusDescription' )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "Failed to modify SOA for zone [${ZONE}]: ${STATUS_DESC}" && exit 1
   elif [ "${STATUS}" = "Success" ]; then
@@ -561,11 +546,11 @@ function set_soa {
   fi
 }
 
-function check_integer {
+function check_integer() {
   local VALUE="$1"
   local LOWER="$2"
   local UPPER="$3"
-  ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[[:digit:]]+$' || return 1
+  builtin echo "${VALUE}" | grep -Eqs '^[[:digit:]]+$' || return 1
   if [ "${VALUE}" -ge "${LOWER}" -a "${VALUE}" -le "${UPPER}" ]; then
     return 0
   else
@@ -573,16 +558,16 @@ function check_integer {
   fi
 }
 
-function validate_soa_value {
+function validate_soa_value() {
   # see https://www.cloudns.net/wiki/article/63/ for permissible integer values
   local TYPE="$1"
   local VALUE="$2"
   case ${TYPE} in
     "ns"      ) # check for at least something.something
-                ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-z0-9-]+\.[a-z0-9-]+'
+                builtin echo "${VALUE}" | grep -Eqs '^[a-z0-9-]+\.[a-z0-9-]+'
                 return $? ;;
     "email"   ) # check for at least something@something
-                ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[^@]+@[^@]+$'
+                builtin echo "${VALUE}" | grep -Eqs '^[^@]+@[^@]+$'
                 return $? ;;
     "refresh" ) check_integer ${VALUE} 1200 43200
                 return $? ;;
@@ -596,25 +581,25 @@ function validate_soa_value {
   esac
 }
 
-function dump_zone {
+function dump_zone() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "dumpzone expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   print_debug "Dumping BIND-format zone file for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
-  local ZONE_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/records-export.json" )
-  local STATUS=$( ${ECHO} "${ZONE_DATA}" | ${JQ} -r '.status' )
+  local ZONE_DATA=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/records-export.json" )
+  local STATUS=$( builtin echo "${ZONE_DATA}" | jq -r '.status' )
   if [ "${STATUS}" = "Success" ]; then
-    ${ECHO} "${ZONE_DATA}" | ${JQ} -r '.zone'
+    builtin echo "${ZONE_DATA}" | jq -r '.zone'
   else
     print_error "Unable to get zone file for [${ZONE}]" && exit 1
   fi
 }
 
-function add_record {
+function add_record() {
   do_tests
   if [ "$#" -lt "5" ]; then
     print_error "usage: ${THISPROG} addrecord <zone> type=<type> host=<host> record=<record> ttl=<ttl> [key=<value> ... key=<value>]"
@@ -624,18 +609,18 @@ function add_record {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   shift
   local -a VALID_KEYS=( "type" "host" "record" "ttl" "priority" "weight" "port" )
   local KV_PAIRS="$@" ERROR_COUNT=0
   local KV_PAIR
   for KV_PAIR in ${KV_PAIRS}; do
-    ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=.+$'
+    builtin echo "${KV_PAIR}" | grep -Eqs '^[a-z-]+=.+$'
     if [ "$?" -ne "0" ]; then
       print_error "key-value pair [${KV_PAIR}] not in correct format" && exit 1
     fi
-    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
-    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    local KEY=$( builtin echo "${KV_PAIR}" | cut -d = -f 1 )
+    local VALUE=$( builtin echo "${KV_PAIR}" | cut -d = -f 2 )
     print_debug "Checking key-value pair: ${KEY}=${VALUE}"
     if ! has_element VALID_KEYS "${KEY}"; then
       print_error "${KEY} is not a valid key"
@@ -648,8 +633,8 @@ function add_record {
   local RR_WEIGHT RR_PORT
   [[ "${ERROR_COUNT}" -gt "0" ]] && exit 1
   for KV_PAIR in ${KV_PAIRS}; do
-    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
-    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    local KEY=$( builtin echo "${KV_PAIR}" | cut -d = -f 1 )
+    local VALUE=$( builtin echo "${KV_PAIR}" | cut -d = -f 2 )
     case ${KEY} in
       "type"     ) local TMPVAR="${VALUE^^}"
                    if validate_rr_value type null "${TMPVAR}"; then
@@ -717,7 +702,7 @@ function add_record {
     if [ ! -f "${RR_RECORD}" ]; then
       print_error "Unable to load record data from [${RR_RECORD}]" && exit 1
     else
-      if [ "$( ${WC} -l ${RR_RECORD} | ${AWK} '{ print $1 }' )" -ne "1" ]; then
+      if [ "$( wc -l ${RR_RECORD} | awk '{ print $1 }' )" -ne "1" ]; then
         print_error "Input file [${RR_RECORD}] has more than one line" && exit 1
       fi
     fi
@@ -776,30 +761,30 @@ function add_record {
     fi
   fi
   if [ "${RR_TYPE}" = "TXT" -o "${RR_TYPE}" = "SPF" ]; then
-    local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} --data-binary @<( ${ECHO} -ne "record=\"" | ${CAT} - ${RR_RECORD} <( ${ECHO} -ne "\"" ) | ${TR} -d '\n' ) "${API_URL}/add-record.json" )
+    local RESPONSE=$( curl -4qs -X POST ${POST_DATA} --data-binary @<( builtin echo -ne "record=\"" | cat - ${RR_RECORD} <( builtin echo -ne "\"" ) | tr -d '\n' ) "${API_URL}/add-record.json" )
   else
     POST_DATA="${POST_DATA} -d record=${RR_RECORD}"
-    local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/add-record.json" )
+    local RESPONSE=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/add-record.json" )
   fi
-  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
-  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  local STATUS=$( builtin echo "${RESPONSE}" | jq -r '.status' )
+  local STATUS_DESC=$( builtin echo "${RESPONSE}" | jq -r '.statusDescription' )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "Failed to add record: ${STATUS_DESC}" && exit 1
   elif [ "${STATUS}" = "Success" ]; then
-    local ID=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.data.id' )
+    local ID=$( builtin echo "${RESPONSE}" | jq -r '.data.id' )
     print_timestamp "Record successfully added with id [${ID}]"
   else
     print_error "Unexpected response while adding record" && exit 1
   fi 
 }
 
-function check_ipv4_address {
+function check_ipv4_address() {
   local IP="$1"
-  local NUM_PARTS=$( ${ECHO} "${IP}" | ${AWK} -F . '{ print NF }' )
+  local NUM_PARTS=$( builtin echo "${IP}" | awk -F . '{ print NF }' )
   if [ "${NUM_PARTS}" -ne "4" ]; then
     return 1
   else
-    for OCTET in $( ${ECHO} "${IP}" | ${TR} '.' ' ' ); do
+    for OCTET in $( builtin echo "${IP}" | tr '.' ' ' ); do
       check_integer "${OCTET}" 0 255
       if [ "$?" -ne "0" ]; then
         return 1
@@ -809,7 +794,7 @@ function check_ipv4_address {
   return 0
 }
 
-function validate_rr_value {
+function validate_rr_value() {
   local CHECK_TYPE="$1"
   local RECORD_TYPE="$2"
   shift 2
@@ -829,7 +814,7 @@ function validate_rr_value {
                    return 1
                  fi 
                  ;;
-    "host"     ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\._@-]+$'
+    "host"     ) builtin echo "${VALUE}" | grep -Eqs '^[a-zA-Z0-9\._@-]+$'
                  return $?
                  ;;
     "ttl"      ) local -a AVAILABLE_TTLS=( $( get_available_ttls ) )
@@ -852,18 +837,18 @@ function validate_rr_value {
                    "A"     ) check_ipv4_address "${VALUE}"
                              return $?
                              ;;
-                   "CNAME" ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\.-]+$'
+                   "CNAME" ) builtin echo "${VALUE}" | grep -Eqs '^[a-zA-Z0-9\.-]+$'
                              return $?
                              ;;
-                   "MX"    ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\.-]+$'
+                   "MX"    ) builtin echo "${VALUE}" | grep -Eqs '^[a-zA-Z0-9\.-]+$'
                              return $?
                              ;;
-                   "NS"    ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\.-]+$'
+                   "NS"    ) builtin echo "${VALUE}" | grep -Eqs '^[a-zA-Z0-9\.-]+$'
                              return $?
                              ;;
                    "SPF"   ) return 0
                              ;;
-                   "SRV"   ) ${ECHO} "${VALUE}" | ${GREP} -Eqs '^[a-zA-Z0-9\.-]+$'
+                   "SRV"   ) builtin echo "${VALUE}" | grep -Eqs '^[a-zA-Z0-9\.-]+$'
                              return $?
                              ;;
                    "TXT"   ) return 0
@@ -877,7 +862,7 @@ function validate_rr_value {
   esac
 }
 
-function delete_record {
+function delete_record() {
   do_tests
   if [ "$#" -ne "2" ]; then
     print_error "usage: ${THISPROG} delrecord <zone> id=<id>"
@@ -887,11 +872,11 @@ function delete_record {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   shift
   local ID_KV="$1"
-  local ID_K=$( ${ECHO} "${ID_KV}" | ${CUT} -d = -f 1 )
-  local ID_V=$( ${ECHO} "${ID_KV}" | ${CUT} -d = -f 2 )
+  local ID_K=$( builtin echo "${ID_KV}" | cut -d = -f 1 )
+  local ID_V=$( builtin echo "${ID_KV}" | cut -d = -f 2 )
   if [ "${ID_K}" != "id" ]; then
     print_error "id=<value> key-value pair not specified" && exit 1
   fi
@@ -902,26 +887,26 @@ function delete_record {
   unset ID_K ID_V ID_KV
   local RECORD_LIST=$( list_records ${ZONE} showid=true )
   local TARGET_RECORD 
-  TARGET_RECORD=$( ${ECHO} "${RECORD_LIST}" | ${GREP} "^.*; id=${ID}$" )
+  TARGET_RECORD=$( builtin echo "${RECORD_LIST}" | grep "^.*; id=${ID}$" )
   if [ "$?" -ne "0" ]; then
     print_error "No record found with id [${ID}] in zone [${ZONE}]"
     exit 1
   fi
   unset RECORD_LIST
-  TARGET_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${SED} 's/; id=[0-9][0-9]*$//' | ${SED} -r 's/[[:space:]]$//' )
+  TARGET_RECORD=$( builtin echo "${TARGET_RECORD}" | sed 's/; id=[0-9][0-9]*$//' | sed -r 's/[[:space:]]$//' )
   print_debug "Deleting record [${TARGET_RECORD}]"
   (( ! FORCE )) && {
     local USER_RESPONSE
-    ${ECHO} -n "Are you sure you want to delete record with id [${ID}]? [y|n]: "
+    builtin echo -n "Are you sure you want to delete record with id [${ID}]? [y|n]: "
     read USER_RESPONSE
     if [ "${USER_RESPONSE}" != "y" ]; then
       print_error "Aborting at user request" && exit 1
     fi
   }
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE} -d record-id=${ID}"
-  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/delete-record.json" )
-  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
-  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  local RESPONSE=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/delete-record.json" )
+  local STATUS=$( builtin echo "${RESPONSE}" | jq -r '.status' )
+  local STATUS_DESC=$( builtin echo "${RESPONSE}" | jq -r '.statusDescription' )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "Failed to delete record: ${STATUS_DESC}" && exit 1
   elif [ "${STATUS}" = "Success" ]; then
@@ -931,7 +916,7 @@ function delete_record {
   fi
 }
 
-function modify_record {
+function modify_record() {
   do_tests
   if [ "$#" -lt "3" ]; then
     print_error "usage: ${THISPROG} modify <zone> id=<id> key=<value> [key=<value> ... key=<value>]"
@@ -941,18 +926,18 @@ function modify_record {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   shift
   local -a VALID_KEYS=( "id" "host" "record" "ttl" "priority" "weight" "port" )
   local KV_PAIRS="$@" ERROR_COUNT=0
   local KV_PAIR
   for KV_PAIR in ${KV_PAIRS}; do
-    ${ECHO} "${KV_PAIR}" | ${GREP} -Eqs '^[a-z-]+=.+$'
+    builtin echo "${KV_PAIR}" | grep -Eqs '^[a-z-]+=.+$'
     if [ "$?" -ne "0" ]; then
       print_error "key-value pair [${KV_PAIR}] not in correct format" && exit 1
     fi
-    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
-    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    local KEY=$( builtin echo "${KV_PAIR}" | cut -d = -f 1 )
+    local VALUE=$( builtin echo "${KV_PAIR}" | cut -d = -f 2 )
     print_debug "Checking key-value pair: ${KEY}=${VALUE}"
     if ! has_element VALID_KEYS "${KEY}"; then
       print_error "${KEY} is not a valid key"
@@ -964,8 +949,8 @@ function modify_record {
   [[ "${ERROR_COUNT}" -gt "0" ]] && exit 1
   local RR_ID RR_HOST RR_RECORD RR_TTL RR_PRIORITY RR_WEIGHT RR_PORT
   for KV_PAIR in ${KV_PAIRS}; do
-    local KEY=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 1 )
-    local VALUE=$( ${ECHO} "${KV_PAIR}" | ${CUT} -d = -f 2 )
+    local KEY=$( builtin echo "${KV_PAIR}" | cut -d = -f 1 )
+    local VALUE=$( builtin echo "${KV_PAIR}" | cut -d = -f 2 )
     case ${KEY} in
       "id"       ) if check_integer "${VALUE}" 0 100000000; then
                      RR_ID="${VALUE}"
@@ -1028,13 +1013,13 @@ function modify_record {
   # list_records ${ZONE} showid=true and sift through the output.
   local RECORD_LIST=$( list_records ${ZONE} showid=true )
   local TARGET_RECORD 
-  TARGET_RECORD=$( ${ECHO} "${RECORD_LIST}" | ${GREP} "^.*; id=${RR_ID}$" )
+  TARGET_RECORD=$( builtin echo "${RECORD_LIST}" | grep "^.*; id=${RR_ID}$" )
   if [ "$?" -ne "0" ]; then
     print_error "No record found with id [${RR_ID}] in zone [${ZONE}]"
     exit 1
   fi
   unset RECORD_LIST
-  local GOT_TYPE=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $4 }' )
+  local GOT_TYPE=$( builtin echo "${TARGET_RECORD}" | awk '{ print $4 }' )
   # preload approriate variables depending on GOT_TYPE. All RRs will have
   # host, ttl, record. MX will have priority. SRV will have priority, weight
   # and port. SPF and TXT could have all kinds of nonsense in the record, but
@@ -1046,24 +1031,24 @@ function modify_record {
     print_error "Trying to modify a record of type [${GOT_TYPE}] is not supported"
     exit 1
   fi
-  TARGET_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${SED} 's/; id=[0-9][0-9]*$//' | ${SED} -r 's/[[:space:]]$//' )
-  GOT_HOST=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $1 }' )
-  GOT_TTL=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $2 }' )
+  TARGET_RECORD=$( builtin echo "${TARGET_RECORD}" | sed 's/; id=[0-9][0-9]*$//' | sed -r 's/[[:space:]]$//' )
+  GOT_HOST=$( builtin echo "${TARGET_RECORD}" | awk '{ print $1 }' )
+  GOT_TTL=$( builtin echo "${TARGET_RECORD}" | awk '{ print $2 }' )
   case ${GOT_TYPE} in
-    "MX"        ) GOT_PRIORITY=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $5 }' )
-                  GOT_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $NF }' )
+    "MX"        ) GOT_PRIORITY=$( builtin echo "${TARGET_RECORD}" | awk '{ print $5 }' )
+                  GOT_RECORD=$( builtin echo "${TARGET_RECORD}" | awk '{ print $NF }' )
                   print_debug "got RR data: HOST=[${GOT_HOST}] TTL=[${GOT_TTL}] TYPE=[${GOT_TYPE}] PRIORITY=[${GOT_PRIORITY}] RECORD=[${GOT_RECORD}]"
                   ;;
-    "SPF"|"TXT" ) GOT_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${SED} 's/^.*"\([^"]*\)"$/\1/' )
+    "SPF"|"TXT" ) GOT_RECORD=$( builtin echo "${TARGET_RECORD}" | sed 's/^.*"\([^"]*\)"$/\1/' )
                   print_debug "got RR data: HOST=[${GOT_HOST}] TTL=[${GOT_TTL}] TYPE=[${GOT_TYPE}] RECORD=[${GOT_RECORD}]"
                   ;;
-    "SRV"       ) GOT_PRIORITY=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $5 }' )
-                  GOT_WEIGHT=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $6 }' )
-                  GOT_PORT=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $7 }' )
-                  GOT_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $NF }' )
+    "SRV"       ) GOT_PRIORITY=$( builtin echo "${TARGET_RECORD}" | awk '{ print $5 }' )
+                  GOT_WEIGHT=$( builtin echo "${TARGET_RECORD}" | awk '{ print $6 }' )
+                  GOT_PORT=$( builtin echo "${TARGET_RECORD}" | awk '{ print $7 }' )
+                  GOT_RECORD=$( builtin echo "${TARGET_RECORD}" | awk '{ print $NF }' )
                   print_debug "got RR data: HOST=[${GOT_HOST}] TTL=[${GOT_TTL}] TYPE=[${GOT_TYPE}] PRIORITY=[${GOT_PRIORITY}] WEIGHT=[${GOT_WEIGHT}] PORT=[${GOT_PORT}] RECORD=[${GOT_RECORD}]"
                   ;;
-    *           ) GOT_RECORD=$( ${ECHO} "${TARGET_RECORD}" | ${AWK} '{ print $NF }' )
+    *           ) GOT_RECORD=$( builtin echo "${TARGET_RECORD}" | awk '{ print $NF }' )
                   print_debug "got RR data: HOST=[${GOT_HOST}] TTL=[${GOT_TTL}] TYPE=[${GOT_TYPE}] RECORD=[${GOT_RECORD}]"
                   ;;
   esac
@@ -1074,10 +1059,10 @@ function modify_record {
     "SPF"|"TXT" ) if [ ! -f "${RR_RECORD}" ]; then
                     print_error "Unable to load record data from [${RR_RECORD}]" && exit 1
                   else
-                    if [ "$( ${WC} -l ${RR_RECORD} | ${AWK} '{ print $1 }' )" -ne "1" ]; then
+                    if [ "$( wc -l ${RR_RECORD} | awk '{ print $1 }' )" -ne "1" ]; then
                       print_error "Input file [${RR_RECORD}] has more than one line" && exit 1
                     else
-                      RR_RECORD="$( ${CAT} ${RR_RECORD} )"
+                      RR_RECORD="$( cat ${RR_RECORD} )"
                     fi
                   fi
                   ;;
@@ -1163,13 +1148,13 @@ function modify_record {
     POST_DATA="${POST_DATA} -d weight=${GOT_WEIGHT} -d port=${GOT_PORT}"
   fi
   if [ "${GOT_TYPE}" = "TXT" -o "${GOT_TYPE}" = "SPF" ]; then
-    local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} --data-binary @<( ${ECHO} -ne "record=\"${GOT_RECORD}\"" ) "${API_URL}/mod-record.json" )
+    local RESPONSE=$( curl -4qs -X POST ${POST_DATA} --data-binary @<( builtin echo -ne "record=\"${GOT_RECORD}\"" ) "${API_URL}/mod-record.json" )
   else
     POST_DATA="${POST_DATA} -d record=${GOT_RECORD}"
-    local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/mod-record.json" )
+    local RESPONSE=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/mod-record.json" )
   fi
-  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
-  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  local STATUS=$( builtin echo "${RESPONSE}" | jq -r '.status' )
+  local STATUS_DESC=$( builtin echo "${RESPONSE}" | jq -r '.statusDescription' )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "Failed to modify record: ${STATUS_DESC}" && exit 1
   elif [ "${STATUS}" = "Success" ]; then
@@ -1179,7 +1164,7 @@ function modify_record {
   fi
 }
 
-function add_zone {
+function add_zone() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "addzone expects exactly one argument" && exit 1
@@ -1188,9 +1173,9 @@ function add_zone {
   local ZONE_TYPE="master" # we only support master zones
   print_debug "Adding new ${ZONE_TYPE} zone for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d zone-type=${ZONE_TYPE} -d domain-name=${ZONE}"
-  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/register.json" )
-  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
-  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  local RESPONSE=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/register.json" )
+  local STATUS=$( builtin echo "${RESPONSE}" | jq -r '.status' )
+  local STATUS_DESC=$( builtin echo "${RESPONSE}" | jq -r '.statusDescription' )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "Failed to add zone [${ZONE}]: ${STATUS_DESC}" && exit 1
   elif [ "${STATUS}" = "Success" ]; then
@@ -1200,27 +1185,27 @@ function add_zone {
   fi
 }
 
-function delete_zone {
+function delete_zone() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "delzone expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
-  check_zone_managed $ZONE
+  check_zone_managed ${ZONE}
   print_debug "Deleting zone [${ZONE}]"
-  ${ECHO} "Are you sure you want to delete zone [${ZONE}]?"
-  ${ECHO} -n "You must type I-AM-SURE, exactly: "
+  builtin echo "Are you sure you want to delete zone [${ZONE}]?"
+  builtin echo -n "You must type I-AM-SURE, exactly: "
   local RESPONSE=""
   builtin read RESPONSE
   if [ "${RESPONSE}" != "I-AM-SURE" ]; then
     print_error "Aborting removal of zone [${ZONE}]" && exit 1
   fi
-  ${ECHO} "Okay. Waiting ${REMOVAL_WAIT}s prior to removal. CTRL-C now if unsure!"
-  ${SLEEP} ${REMOVAL_WAIT}
+  builtin echo "Okay. Waiting ${REMOVAL_WAIT}s prior to removal. CTRL-C now if unsure!"
+  sleep ${REMOVAL_WAIT}
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
-  local RESPONSE=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/delete.json" )
-  local STATUS=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.status' )
-  local STATUS_DESC=$( ${ECHO} "${RESPONSE}" | ${JQ} -r '.statusDescription' )
+  local RESPONSE=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/delete.json" )
+  local STATUS=$( builtin echo "${RESPONSE}" | jq -r '.status' )
+  local STATUS_DESC=$( builtin echo "${RESPONSE}" | jq -r '.statusDescription' )
   if [ "${STATUS}" = "Failed" ]; then
     print_error "Unable to delete zone [${ZONE}]: ${STATUS_DESC}" && exit 1
   elif [ "${STATUS}" = "Success" ]; then
@@ -1230,22 +1215,22 @@ function delete_zone {
   fi
 }
 
-function list_zones {
+function list_zones() {
   do_tests
   local PAGE_COUNT=$( get_page_count )
   local COUNTER=0
   local POST_DATA="${AUTH_POST_DATA} -d page=0 -d rows-per-page=${ROWS_PER_PAGE}"
   while [ "${COUNTER}" -lt "${PAGE_COUNT}" ]; do
     print_debug "Processing listzones page=$(( ${COUNTER} + 1 )) with rows-per-page=${ROWS_PER_PAGE}"
-    POST_DATA=$( ${ECHO} "${POST_DATA}" |\
-                 ${SED} "s/^\(.*-d page=\)[0-9][0-9]*\( .*\)$/\1$(( ${COUNTER} + 1 ))\2/" )
-    local OUTPUT=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/list-zones.json" | ${JQ} -r . )
-    ${ECHO} "${OUTPUT}" | ${JQ} -r '.[] | .name + ":" + .type'
+    POST_DATA=$( builtin echo "${POST_DATA}" |\
+                 sed "s/^\(.*-d page=\)[0-9][0-9]*\( .*\)$/\1$(( ${COUNTER} + 1 ))\2/" )
+    local OUTPUT=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/list-zones.json" | jq -r . )
+    builtin echo "${OUTPUT}" | jq -r '.[] | .name + ":" + .type'
     (( COUNTER = COUNTER + 1 ))
   done
 }
 
-function call_helper {
+function call_helper() {
   do_tests
   if [ "$#" -ne "1" ]; then
     print_error "helper expects exactly one argument" && exit 1
@@ -1261,7 +1246,7 @@ function call_helper {
   esac
 }
 
-function test_login {
+function test_login() {
   # don't check SKIP_TESTS here as this is the "test" command
   test_api_url
   do_login
@@ -1273,16 +1258,16 @@ function test_login {
   fi
 }
 
-function check_zone_managed {
+function check_zone_managed() {
   local ZONE=$1
   local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  LISTED_ZONES=$( list_zones | grep -qs "^${ZONE}:" )
   if [ "$?" -ne "0" ]; then
     print_error "Zone [${ZONE}] not under management" && exit 1
   fi
 }
 
-while ${GETOPTS} ":dfhjs" OPTION; do
+while getopts ":dfhjs" OPTION; do
   case ${OPTION} in
     "d") DEBUG=1               ;;
     "f") FORCE=1               ;;
