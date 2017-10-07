@@ -194,11 +194,7 @@ function ns_status {
     print_error "nsstatus expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   print_debug "Checking NS status for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
   local NS_STATUS=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/update-status.json" )
@@ -295,11 +291,7 @@ function list_records {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   shift
   if [ "$#" -gt "3" ]; then
     print_error "usage: ${THISPROG} listrecords <zone> [type=<type>] [host=<host>] [showid=<true|false>]"
@@ -400,11 +392,7 @@ function get_soa {
     print_error "getsoa expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   print_debug "Retrieving SOA details for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
   local SOA_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/soa-details.json" )
@@ -426,11 +414,7 @@ function set_soa {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   print_debug "Modifying SOA record for zone [${ZONE}]"
   shift
   local -a VALID_KEYS=( "primary-ns" "admin-mail" "refresh" "retry" "expire" "default-ttl" )
@@ -618,11 +602,7 @@ function dump_zone {
     print_error "dumpzone expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   print_debug "Dumping BIND-format zone file for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
   local ZONE_DATA=$( ${CURL} -4qs -X POST ${POST_DATA} "${API_URL}/records-export.json" )
@@ -644,11 +624,7 @@ function add_record {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   shift
   local -a VALID_KEYS=( "type" "host" "record" "ttl" "priority" "weight" "port" )
   local KV_PAIRS="$@" ERROR_COUNT=0
@@ -911,11 +887,7 @@ function delete_record {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   shift
   local ID_KV="$1"
   local ID_K=$( ${ECHO} "${ID_KV}" | ${CUT} -d = -f 1 )
@@ -969,11 +941,7 @@ function modify_record {
   if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
     print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
   fi
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   shift
   local -a VALID_KEYS=( "id" "host" "record" "ttl" "priority" "weight" "port" )
   local KV_PAIRS="$@" ERROR_COUNT=0
@@ -1238,11 +1206,7 @@ function delete_zone {
     print_error "delzone expects exactly one argument" && exit 1
   fi
   local ZONE="$1"
-  local LISTED_ZONES
-  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
-  if [ "$?" -ne "0" ]; then
-    print_error "Zone [${ZONE}] not under management" && exit 1
-  fi
+  check_zone_managed $ZONE
   print_debug "Deleting zone [${ZONE}]"
   ${ECHO} "Are you sure you want to delete zone [${ZONE}]?"
   ${ECHO} -n "You must type I-AM-SURE, exactly: "
@@ -1306,6 +1270,15 @@ function test_login {
   else
     print_error "Login test failed"
     exit 1
+  fi
+}
+
+function check_zone_managed {
+  local ZONE=$1
+  local LISTED_ZONES
+  LISTED_ZONES=$( list_zones | ${GREP} -qs "^${ZONE}:" )
+  if [ "$?" -ne "0" ]; then
+    print_error "Zone [${ZONE}] not under management" && exit 1
   fi
 }
 
