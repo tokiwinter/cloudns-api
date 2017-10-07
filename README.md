@@ -24,20 +24,21 @@ Usage
            -s   skip testing authentication prior to attempting API operations
     
        Commands:
-           listzones  - list zones under management
-           addzone    - add a new zone
-           delzone    - delete an existing zone
-           checkzone  - check that a zone is managed
-           dumpzone   - dump a zone in BIND zonefile format
-           zonestatus - check whether a zone is updated on all NS
-           nsstatus   - view a breakdown of zone update status by NS
-           addrecord  - add a new DNS record to a zone
-           delrecord  - delete a DNS record from a zone
-           modify     - modify an existing DNS record
-           getsoa     - get SOA record parameters for a zone
-           setsoa     - set SOA record parameters for a zone
-           helper     - call a helper function directly
-           test       - perform an authentication test
+           listzones    - list zones under management
+           addzone      - add a new zone
+           delzone      - delete an existing zone
+           checkzone    - check that a zone is managed
+           dumpzone     - dump a zone in BIND zonefile format
+           zonestatus   - check whether a zone is updated on all NS
+           nsstatus     - view a breakdown of zone update status by NS
+           addrecord    - add a new DNS record to a zone
+           delrecord    - delete a DNS record from a zone
+           listrecords  - list zones under management
+           modify       - modify an existing DNS record
+           getsoa       - get SOA record parameters for a zone
+           setsoa       - set SOA record parameters for a zone
+           helper       - call a helper function directly
+           test         - perform an authentication test
     
        Environment:
          Ensure that the following two environment variables are exported:
