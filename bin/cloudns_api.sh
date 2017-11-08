@@ -38,6 +38,7 @@ function print_usage() {
     builtin echo "       dumpzone     - dump a zone in BIND zonefile format"
     builtin echo "       zonestatus   - check whether a zone is updated on all NS"
     builtin echo "       nsstatus     - view a breakdown of zone update status by NS"
+    builtin echo "       addmaster    - add new master server in domain zone"
     builtin echo "       listmaster   - list master servers in the domain zone"
     builtin echo "       addrecord    - add a new DNS record to a zone"
     builtin echo "       delrecord    - delete a DNS record from a zone"
@@ -92,7 +93,9 @@ function process_arguments() {
                      zone_status "$@"         ;;
     "nsstatus"     ) shift
                      ns_status "$@"           ;;
-    "listmaster"    ) shift
+    "addmaster"    ) shift
+                     add_master "$@"          ;;
+    "listmaster"   ) shift
                      list_master "$@"         ;;
     "addrecord"    ) shift
                      add_record "$@"          ;;
@@ -599,6 +602,34 @@ function dump_zone() {
     builtin echo "${ZONE_DATA}" | jq -r '.zone'
   else
     print_error "Unable to get zone file for [${ZONE}]" && exit 1
+  fi
+}
+
+function add_master() {
+  do_tests
+  if [ "$#" -ne "2" ]; then
+    print_error "usage: ${THISPROG} addmaster <zone> <masterip>"
+    exit 1
+  fi
+  local ZONE="$1"
+  shift
+  local MASTERIP="$1"
+  if ! check_ipv4_address ${MASTERIP}; then
+    print_error "${MASTERIP} doesn't look like an IP"
+    exit 1
+  fi
+  check_zone_managed ${ZONE}
+  print_debug "Adding MASTER IP to slave zone [${ZONE}]"
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE} -d master-ip=${MASTERIP}"
+  local RESPONSE=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/add-master-server.json" )
+  local STATUS=$( builtin echo "${RESPONSE}" | jq -r '.status' )
+  local STATUS_DESC=$( builtin echo "${RESPONSE}" | jq -r '.statusDescription' )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "Failed to add master IP for zone [${ZONE}]: ${STATUS_DESC}" && exit 1
+  elif [ "${STATUS}" = "Success" ]; then
+    print_timestamp "Master IP was added successfully to zone [${ZONE}]"
+  else
+    print_error "Unexpected response while adding master IP for zone [${ZONE}]" && exit 1
   fi
 }
 
