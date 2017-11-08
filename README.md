@@ -31,6 +31,9 @@ Usage
            dumpzone     - dump a zone in BIND zonefile format
            zonestatus   - check whether a zone is updated on all NS
            nsstatus     - view a breakdown of zone update status by NS
+           addmaster    - add new master server in domain zone
+           delmaster    - delete master server by ID in domain zone
+           listmaster   - list master servers in the domain zone
            addrecord    - add a new DNS record to a zone
            delrecord    - delete a DNS record from a zone
            listrecords  - list zones under management
@@ -198,6 +201,56 @@ View the zone update status per nameserver.
     pns2.cloudns.net:true
     pns3.cloudns.net:true
     pns4.cloudns.net:true
+
+### listmaster ###
+
+#### Description ####
+
+List master ips on slave zones. IDs are not shown by default, specify `showid=true` to
+display them.
+
+#### Usage #####
+
+    $ cloudns_api.sh listmaster <zonename> [showid=<true|false>]
+
+#### Example ####
+
+    $ cloudns_api.sh listmaster example.com showid=true
+    1.2.3.4 ; id=567890
+    5.6.7.8 ; id=123456
+
+### addmaster ###
+
+#### Description ####
+
+Add master ip to slave zones.
+
+#### Usage #####
+
+    $ cloudns_api.sh addmaster <zonename> <masterip>
+
+#### Example ####
+
+    $ cloudns_api.sh addmaster example.com 1.2.3.4
+    Wed Nov  8 16:50:40 CET 2017: Master IP was added successfully to zone [example.com]
+
+### delmaster ###
+
+#### Description ####
+
+Remove master ip from slave zones. You will be asked to confirm the operation. You
+can avoid this, and force the removal, with `-f`. Obtain the record id using the `listmaster`
+command.
+
+#### Usage #####
+
+    $ cloudns_api.sh delmaster <zonename> <masterid>
+
+#### Example ####
+
+    $ cloudns_api.sh delmaster example.com id=567890
+    Are you sure you want to delete master with id [567890]? [y|n]: y
+    Wed Nov  8 16:51:18 CET 2017: Master successfully deleted
 
 ### addrecord ###
 
@@ -370,7 +423,6 @@ Current limitations. I may further develop the functionality offered by the scri
 I receive enough interest.
 
 - does not support sub-auth-id
-- only supports master zones
 - only supports forward zones
 - only supports creation/modification of SUPPORTED_RECORD_TYPES  
 

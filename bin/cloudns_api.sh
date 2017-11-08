@@ -11,12 +11,6 @@ THISPROG=$( basename $0 )
 ROWS_PER_PAGE=100
 SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
 
-# current limitations
-# - does not support sub-auth-id
-# - only supports master zones
-# - only supports forward zones
-# - only supports creation/modification of SUPPORTED_RECORD_TYPES
-
 function print_error() {
   builtin echo "$( date ): Error: $@" >&2
 }
