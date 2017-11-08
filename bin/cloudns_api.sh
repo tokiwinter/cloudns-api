@@ -38,6 +38,7 @@ function print_usage() {
     builtin echo "       dumpzone     - dump a zone in BIND zonefile format"
     builtin echo "       zonestatus   - check whether a zone is updated on all NS"
     builtin echo "       nsstatus     - view a breakdown of zone update status by NS"
+    builtin echo "       listmaster   - list master servers in the domain zone"
     builtin echo "       addrecord    - add a new DNS record to a zone"
     builtin echo "       delrecord    - delete a DNS record from a zone"
     builtin echo "       listrecords  - list records in a zone"
@@ -91,6 +92,8 @@ function process_arguments() {
                      zone_status "$@"         ;;
     "nsstatus"     ) shift
                      ns_status "$@"           ;;
+    "listmaster"    ) shift
+                     list_master "$@"         ;;
     "addrecord"    ) shift
                      add_record "$@"          ;;
     "delrecord"    ) shift
@@ -596,6 +599,51 @@ function dump_zone() {
     builtin echo "${ZONE_DATA}" | jq -r '.zone'
   else
     print_error "Unable to get zone file for [${ZONE}]" && exit 1
+  fi
+}
+
+function list_master() {
+  do_tests
+  if [ "$#" -ne "1" -a "$#" -ne "2" ]; then
+    print_error "usage: ${THISPROG} listmaster <zone> [showid=<true|false>]"
+    exit 1
+  fi
+  local ZONE="$1"
+  shift
+  if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
+    print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
+  check_zone_managed ${ZONE}
+  if [ "$#" -eq "1" ]; then
+    local -a VALID_KEYS=( "showid" )
+    builtin echo "${1}" | grep -Eqs '^[a-z-]+=[^=]+$'
+    if [ "$?" -ne "0" ]; then
+      print_error "key-value pair [${1}] not in correct format" && exit 1
+    fi
+    local KEY=$( builtin echo "${1}" | cut -d = -f 1 )
+    local VALUE=$( builtin echo "${1}" | cut -d = -f 2 )
+    print_debug "Checking key-value pair: ${KEY}=${VALUE}"
+    if ! has_element VALID_KEYS "${KEY}"; then
+      print_error "${KEY} is not a valid key"
+    fi
+    case ${KEY} in
+      "showid" ) case ${VALUE} in
+                   "true"|"false" ) SHOW_ID="${VALUE}"
+                                    ;;
+                   *              ) print_error "Invalid value for showid"
+                                    exit 1
+                                    ;;
+                 esac
+                 ;;
+    esac
+  fi
+  print_debug "Processing listmaster on zone ${ZONE}"
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
+  local OUTPUT=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/master-servers.json" | jq -r '.' )
+  if [ "${SHOW_ID}" = "true" ]; then
+    builtin echo "${OUTPUT}" | jq -r 'to_entries|map("\(.value) ; id=\(.key)")|.[]'
+  else
+    builtin echo "${OUTPUT}" | jq -r '.[]'
   fi
 }
 
