@@ -39,6 +39,7 @@ function print_usage() {
     builtin echo "       zonestatus   - check whether a zone is updated on all NS"
     builtin echo "       nsstatus     - view a breakdown of zone update status by NS"
     builtin echo "       addmaster    - add new master server in domain zone"
+    builtin echo "       delmaster    - delete master server by ID in domain zone"
     builtin echo "       listmaster   - list master servers in the domain zone"
     builtin echo "       addrecord    - add a new DNS record to a zone"
     builtin echo "       delrecord    - delete a DNS record from a zone"
@@ -95,6 +96,8 @@ function process_arguments() {
                      ns_status "$@"           ;;
     "addmaster"    ) shift
                      add_master "$@"          ;;
+    "delmaster"    ) shift
+                     delete_master "$@"          ;;
     "listmaster"   ) shift
                      list_master "$@"         ;;
     "addrecord"    ) shift
@@ -612,8 +615,7 @@ function add_master() {
     exit 1
   fi
   local ZONE="$1"
-  shift
-  local MASTERIP="$1"
+  local MASTERIP="$2"
   if ! check_ipv4_address ${MASTERIP}; then
     print_error "${MASTERIP} doesn't look like an IP"
     exit 1
@@ -630,6 +632,60 @@ function add_master() {
     print_timestamp "Master IP was added successfully to zone [${ZONE}]"
   else
     print_error "Unexpected response while adding master IP for zone [${ZONE}]" && exit 1
+  fi
+}
+
+function delete_master() {
+  do_tests
+  if [ "$#" -ne "2" ]; then
+    print_error "usage: ${THISPROG} delmaster <zone> id=<id>"
+    exit 1
+  fi
+  local ZONE="$1"
+  if [[ "${ZONE}" =~ ^.*=.*$ ]]; then
+    print_error "[${ZONE}] looks like a key=value pair, not a zone name" && exit 1
+  fi
+  check_zone_managed ${ZONE}
+  shift
+  local ID_KV="$1"
+  local ID_K=$( builtin echo "${ID_KV}" | cut -d = -f 1 )
+  local ID_V=$( builtin echo "${ID_KV}" | cut -d = -f 2 )
+  if [ "${ID_K}" != "id" ]; then
+    print_error "id=<value> key-value pair not specified" && exit 1
+  fi
+  if ! [[ "${ID_V}" =~ ^[0-9]+$ ]]; then
+    print_error "id is not an integer" && exit 1
+  fi
+  local ID=${ID_V}
+  unset ID_K ID_V ID_KV
+  local MASTER_LIST=$( list_master ${ZONE} showid=true )
+  local TARGET_MASTER
+  TARGET_MASTER=$( builtin echo "${MASTER_LIST}" | grep "^.*; id=${ID}$" )
+  if [ "$?" -ne "0" ]; then
+    print_error "No master found with id [${ID}] in zone [${ZONE}]"
+    exit 1
+  fi
+  unset MASTER_LIST
+  TARGET_MASTER=$( builtin echo "${TARGET_MASTER}" | sed 's/; id=[0-9][0-9]*$//' | sed -r 's/[[:space:]]$//' )
+  print_debug "Deleting master [${TARGET_MASTER}]"
+  (( ! FORCE )) && {
+    local USER_RESPONSE
+    builtin echo -n "Are you sure you want to delete master with id [${ID}]? [y|n]: "
+    read USER_RESPONSE
+    if [ "${USER_RESPONSE}" != "y" ]; then
+      print_error "Aborting at user request" && exit 1
+    fi
+  }
+  local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE} -d master-id=${ID}"
+  local RESPONSE=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/delete-master-server.json" )
+  local STATUS=$( builtin echo "${RESPONSE}" | jq -r '.status' )
+  local STATUS_DESC=$( builtin echo "${RESPONSE}" | jq -r '.statusDescription' )
+  if [ "${STATUS}" = "Failed" ]; then
+    print_error "Failed to delete master: ${STATUS_DESC}" && exit 1
+  elif [ "${STATUS}" = "Success" ]; then
+    print_timestamp "Master successfully deleted"
+  else
+    print_error "Unexpected response while deleting master" && exit 1
   fi
 }
 
