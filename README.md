@@ -1,6 +1,8 @@
 cloudns-api
 ===========
 
+[![License: GPL](https://img.shields.io/badge/License-GPL-blue.svg)](https://www.gnu.org/licenses/gpl.html)
+
 This script has been developed to provide a simple-to-use command line interface
 to the JSON API provided by ClouDNS (http://cloudns.net).
 
