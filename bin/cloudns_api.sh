@@ -9,7 +9,7 @@ SKIP_TESTS=0
 THISPROG=$( basename $0 )
 
 ROWS_PER_PAGE=100
-SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
+SUPPORTED_RECORD_TYPES=( "A" "AAAA" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )
 
 function print_error() {
   builtin echo "$( date ): Error: $@" >&2
@@ -923,6 +923,21 @@ function check_ipv4_address() {
   return 0
 }
 
+function check_ipv6_address() {
+  local IP="$1"
+  # adapted from https://gist.github.com/syzdek/6086792
+  local RE_IPV6="([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|"                    # TEST: 1:2:3:4:5:6:7:8
+  local RE_IPV6="${RE_IPV6}([0-9a-fA-F]{1,4}:){1,7}:|"                         # TEST: 1::                              1:2:3:4:5:6:7::
+  local RE_IPV6="${RE_IPV6}([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|"         # TEST: 1::8             1:2:3:4:5:6::8  1:2:3:4:5:6::8
+  local RE_IPV6="${RE_IPV6}([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|"  # TEST: 1::7:8           1:2:3:4:5::7:8  1:2:3:4:5::8
+  local RE_IPV6="${RE_IPV6}([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|"  # TEST: 1::6:7:8         1:2:3:4::6:7:8  1:2:3:4::8
+  local RE_IPV6="${RE_IPV6}([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|"  # TEST: 1::5:6:7:8       1:2:3::5:6:7:8  1:2:3::8
+  local RE_IPV6="${RE_IPV6}([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|"  # TEST: 1::4:5:6:7:8     1:2::4:5:6:7:8  1:2::8
+  local RE_IPV6="${RE_IPV6}[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|"       # TEST: 1::3:4:5:6:7:8   1::3:4:5:6:7:8  1::8
+  local RE_IPV6="${RE_IPV6}:((:[0-9a-fA-F]{1,4}){1,7}|:)"                     # TEST: ::2:3:4:5:6:7:8  ::2:3:4:5:6:7:8 ::8       ::
+  builtin echo $IP | grep -Eqs "${RE_IPV6}"
+}
+
 function validate_rr_value() {
   local CHECK_TYPE="$1"
   local RECORD_TYPE="$2"
@@ -964,6 +979,9 @@ function validate_rr_value() {
                  ;;
     "record"   ) case "${RECORD_TYPE}" in
                    "A"     ) check_ipv4_address "${VALUE}"
+                             return $?
+                             ;;
+                   "AAAA"  ) check_ipv6_address "${VALUE}"
                              return $?
                              ;;
                    "CNAME" ) builtin echo "${VALUE}" | grep -Eqs '^[a-zA-Z0-9\.-]+$'

@@ -263,7 +263,7 @@ Add a new resource record to a zone.
 Options required depend upon the record type being added. The key=value pairs can appear
 in any order.
 
-For A, NS, CNAME, SPF, TXT:
+For A, AAAA, NS, CNAME, SPF, TXT:
 
     $ cloudns_api.sh addrecord <zonename> type=<type> host=<host> record=<record> ttl=<ttl>
 
@@ -426,4 +426,4 @@ I receive enough interest.
 - only supports forward zones
 - only supports creation/modification of SUPPORTED_RECORD_TYPES  
 
-`SUPPORTED_RECORD_TYPES=( "A" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )`
+`SUPPORTED_RECORD_TYPES=( "A" "AAAA" "CNAME" "MX" "NS" "SPF" "SRV" "TXT" )`
