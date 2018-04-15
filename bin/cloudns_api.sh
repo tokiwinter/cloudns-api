@@ -43,6 +43,7 @@ function print_usage() {
     builtin echo "       delzone      - delete an existing zone"
     builtin echo "       checkzone    - check that a zone is managed"
     builtin echo "       dumpzone     - dump a zone in BIND zonefile format"
+    builtin echo "       dumpallzones - dump all zones in BIND zonefile format"
     builtin echo "       zonestatus   - check whether a zone is updated on all NS"
     builtin echo "       nsstatus     - view a breakdown of zone update status by NS"
     builtin echo "       addmaster    - add new master server in domain zone"
@@ -97,6 +98,8 @@ function process_arguments() {
                      check_zone "$@"          ;;
     "dumpzone"     ) shift
                      dump_zone "$@"           ;;
+    "dumpallzones" ) shift
+                     dump_all_zones "$@"      ;;
     "zonestatus"   ) shift
                      zone_status "$@"         ;;
     "nsstatus"     ) shift
@@ -604,6 +607,11 @@ function dump_zone() {
   fi
   local ZONE="$1"
   check_zone_managed ${ZONE}
+  dump_zone_impl $ZONE
+}
+
+function dump_zone_impl() {
+  local ZONE="$1"
   print_debug "Dumping BIND-format zone file for [${ZONE}]"
   local POST_DATA="${AUTH_POST_DATA} -d domain-name=${ZONE}"
   local ZONE_DATA=$( curl -4qs -X POST ${POST_DATA} "${API_URL}/records-export.json" )
@@ -613,6 +621,28 @@ function dump_zone() {
   else
     print_error "Unable to get zone file for [${ZONE}]" && exit 1
   fi
+}
+
+function dump_all_zones() {
+  do_tests
+  if [ "$#" -ne "1" ]; then
+    print_error "dumpallzones expects exactly one argument" && exit 1
+  fi
+
+  local OUTPUT_DIR="$1"
+  if ! mkdir -p $OUTPUT_DIR >/dev/null 2>&1; then
+    print_error "Unable to create output directory ${OUTPUT_DIR}"
+    exit 1
+  fi;
+
+  for RAW_ZONE in `list_zones`; do
+    # Only master zones can be exported
+    local TYPE=$( builtin echo "${RAW_ZONE}" | cut -d : -f 2 )
+    if [ "${TYPE}" = "master" ]; then
+      local ZONE=$( builtin echo "${RAW_ZONE}" | cut -d : -f 1 )
+      dump_zone_impl $ZONE > "$OUTPUT_DIR/$ZONE.conf"
+    fi;
+  done;
 }
 
 function add_master() {
