@@ -641,6 +641,7 @@ function dump_all_zones() {
     if [ "${TYPE}" = "master" ]; then
       local ZONE=$( builtin echo "${RAW_ZONE}" | cut -d : -f 1 )
       dump_zone_impl $ZONE > "$OUTPUT_DIR/$ZONE.conf"
+      builtin echo "- ${ZONE}"
     fi;
   done;
 }
