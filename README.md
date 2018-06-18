@@ -31,6 +31,7 @@ Usage
            delzone      - delete an existing zone
            checkzone    - check that a zone is managed
            dumpzone     - dump a zone in BIND zonefile format
+           dumpallzones - dump all zones in BIND zonefile format
            zonestatus   - check whether a zone is updated on all NS
            nsstatus     - view a breakdown of zone update status by NS
            addmaster    - add new master server in domain zone
@@ -164,6 +165,23 @@ Dump an entire zone in BIND (RFC 1035) format, ideal for redirecting to a file.
     @           IN  SOA  ns1.cloudns.net. support.cloudns.net. 2017022309 7200 1800 1209600 3600
     @     3600  IN  NS   ns1.cloudns.net.
     ....
+
+### dumpallzones ###
+
+#### Description ####
+
+Similar to `dumpzone`, except it dumps **all** zones into a particular directory.
+This is useful for backing up your entire account. The output directory will be
+created if it does not already exist.
+
+#### Usage ####
+
+   $ cloudns_api.sh dumpzone <output directory>
+
+#### Example ####
+
+   $ cloudns_api.sh dumpzone /var/backup/zones/
+
 
 ### zonestatus ###
 
