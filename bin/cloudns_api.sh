@@ -1143,7 +1143,7 @@ function modify_record() {
     local KEY=$( builtin echo "${KV_PAIR}" | cut -d = -f 1 )
     local VALUE=$( builtin echo "${KV_PAIR}" | cut -d = -f 2 )
     case ${KEY} in
-      "id"       ) if check_integer "${VALUE}" 0 100000000; then
+      "id"       ) if check_integer "${VALUE}" 0 100000000000; then
                      RR_ID="${VALUE}"
                    else
                      print_error "id must be an integer value" && exit 1
