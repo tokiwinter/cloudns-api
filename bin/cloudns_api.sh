@@ -67,7 +67,7 @@ function print_usage() {
 }
 
 function check_jq() {
-  
+
   if ! which jq >/dev/null 2>&1; then
     print_error "This program requires jq to be installed. Install it."
     exit 1
@@ -135,6 +135,7 @@ function check_environment_variables() {
     local REQUIRED_VARIABLES=( CLOUDNS_API_SUB_ID CLOUDNS_PASSWORD )
   else
     local REQUIRED_VARIABLES=( CLOUDNS_API_ID CLOUDNS_PASSWORD )
+  fi
   for REQUIRED_VARIABLE in ${REQUIRED_VARIABLES[@]}; do
     if $( builtin eval test -z \${${REQUIRED_VARIABLE}} ); then
       print_error "Environment variable \${${REQUIRED_VARIABLE}} unset"
@@ -170,7 +171,7 @@ function do_login() {
                 return 0 ;;
     *         ) print_error "Login failed"
                 exit 1 ;;
-  esac  
+  esac
 }
 
 function do_tests() {
@@ -543,7 +544,7 @@ function set_soa() {
                       fi
                       ;;
     esac
-  done 
+  done
   if [ "${CHANGED}" -eq "0" ]; then
     print_timestamp "Nothing has changed - no need to modify" && exit 0
   fi
@@ -956,7 +957,7 @@ function add_record() {
     print_timestamp "Record successfully added with id [${ID}]"
   else
     print_error "Unexpected response while adding record" && exit 1
-  fi 
+  fi
 }
 
 function check_ipv4_address() {
@@ -1008,7 +1009,7 @@ function validate_rr_value() {
                    fi
                  else
                    return 1
-                 fi 
+                 fi
                  ;;
     "host"     ) builtin echo "${VALUE}" | grep -Eqs '^[a-zA-Z0-9\._@-]+$'
                  return $?
@@ -1085,7 +1086,7 @@ function delete_record() {
   local ID=${ID_V}
   unset ID_K ID_V ID_KV
   local RECORD_LIST=$( list_records ${ZONE} showid=true )
-  local TARGET_RECORD 
+  local TARGET_RECORD
   TARGET_RECORD=$( builtin echo "${RECORD_LIST}" | grep "^.*; id=${ID}$" )
   if [ "$?" -ne "0" ]; then
     print_error "No record found with id [${ID}] in zone [${ZONE}]"
@@ -1156,7 +1157,7 @@ function modify_record() {
                    else
                      print_error "id must be an integer value" && exit 1
                    fi
-                   ;; 
+                   ;;
       "host"     ) if validate_rr_value host null "${VALUE}"; then
                      RR_HOST="${VALUE}"
                    else
@@ -1206,12 +1207,12 @@ function modify_record() {
   # depending upon the record type being modified, and the modifications being made
   # we *do*, however, need RR_ID set, at least
   if [ -z "${RR_ID}" ]; then print_error "id=<value> not passed" && exit 1; fi
-  # first, we need to try to get a record with this id, to pre-populate some 
+  # first, we need to try to get a record with this id, to pre-populate some
   # variables which we may overwrite with user supplied key=value pairs, if they
   # are set. The ClouDNS API has no way of retrieving a record by id. So, we use
   # list_records ${ZONE} showid=true and sift through the output.
   local RECORD_LIST=$( list_records ${ZONE} showid=true )
-  local TARGET_RECORD 
+  local TARGET_RECORD
   TARGET_RECORD=$( builtin echo "${RECORD_LIST}" | grep "^.*; id=${RR_ID}$" )
   if [ "$?" -ne "0" ]; then
     print_error "No record found with id [${RR_ID}] in zone [${ZONE}]"
