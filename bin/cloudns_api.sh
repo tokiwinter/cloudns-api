@@ -60,8 +60,9 @@ function print_usage() {
     builtin echo ""
     builtin echo "   Environment:"
     builtin echo "     Ensure that the following two environment variables are exported:"
-    builtin echo "       CLOUDNS_API_ID   - your ClouDNS API ID (auth-id)"
-    builtin echo "       CLOUDNS_PASSWORD - your ClouDNS API password (auth-password)"   
+    builtin echo "       CLOUDNS_API_ID       - your ClouDNS API ID (auth-id)"
+    builtin echo "       CLOUDNS_API_SUB_ID   - your ClouDNS API Sub-Auth-ID (sub-auth-id) [optional]. If set, it will be used as the prefered auth ID."
+    builtin echo "       CLOUDNS_PASSWORD     - your ClouDNS API password (auth-password)"
   } >&2
 }
 
@@ -130,7 +131,10 @@ function process_arguments() {
 
 function check_environment_variables() {
   local ERROR_COUNT=0
-  local REQUIRED_VARIABLES=( CLOUDNS_API_ID CLOUDNS_PASSWORD )
+  if [ -n CLOUDNS_API_SUB_ID ]; then
+    local REQUIRED_VARIABLES=( CLOUDNS_API_SUB_ID CLOUDNS_PASSWORD )
+  else
+    local REQUIRED_VARIABLES=( CLOUDNS_API_ID CLOUDNS_PASSWORD )
   for REQUIRED_VARIABLE in ${REQUIRED_VARIABLES[@]}; do
     if $( builtin eval test -z \${${REQUIRED_VARIABLE}} ); then
       print_error "Environment variable \${${REQUIRED_VARIABLE}} unset"
@@ -143,7 +147,11 @@ function check_environment_variables() {
 }
 
 function set_auth_post_data() {
-  AUTH_POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
+  if [ -n CLOUDNS_API_SUB_ID ]; then
+    AUTH_POST_DATA="-d sub-auth-id=${CLOUDNS_API_SUB_ID} -d auth-password=${CLOUDNS_PASSWORD}"
+  else
+    AUTH_POST_DATA="-d auth-id=${CLOUDNS_API_ID} -d auth-password=${CLOUDNS_PASSWORD}"
+  fi
 }
 
 function test_api_url() {
